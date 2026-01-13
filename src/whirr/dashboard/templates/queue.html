@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Queue - whirr{% endblock %}
+
+{% block queue_badge %}
+{% set queued_count = jobs|selectattr('status', 'equalto', 'queued')|list|length %}
+{% if queued_count > 0 %}
+<span class="ml-auto bg-zinc-700 text-zinc-300 text-xs px-2 py-0.5 rounded-full">{{ queued_count }}</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-white">Job Queue</h1>
+    <div class="text-sm text-zinc-500">
+        {{ jobs|selectattr('status', 'equalto', 'running')|list|length }} running ·
+        {{ jobs|selectattr('status', 'equalto', 'queued')|list|length }} queued
+    </div>
+</div>
+
+{% if jobs %}
+<div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <table class="w-full">
+        <thead>
+            <tr class="text-left text-xs text-zinc-500 border-b border-zinc-800 bg-zinc-950">
+                <th class="px-4 py-3 font-medium">ID</th>
+                <th class="px-4 py-3 font-medium">Name</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+                <th class="px-4 py-3 font-medium">Command</th>
+                <th class="px-4 py-3 font-medium">Worker</th>
+                <th class="px-4 py-3 font-medium">Created</th>
+                <th class="px-4 py-3 font-medium"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-800">
+            {% for job in jobs %}
+            <tr class="hover:bg-zinc-800/50">
+                <td class="px-4 py-3 text-sm text-zinc-400 font-mono">#{{ job.id }}</td>
+                <td class="px-4 py-3">
+                    <div class="text-sm text-white">{{ job.name or '-' }}</div>
+                    {% if job.tags %}
+                    <div class="flex gap-1 mt-1">
+                        {% for tag in job.tags|deserialize_json %}
+                        <span class="text-xs bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if job.status == 'running' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 animate-pulse"></span>
+                        running
+                    </span>
+                    {% elif job.status == 'queued' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-700 text-zinc-300">
+                        queued
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    <code class="text-xs text-zinc-400 bg-zinc-800 px-2 py-1 rounded max-w-xs truncate block">
+                        {{ job.command_argv|deserialize_json|join(' ') if job.command_argv else '-' }}
+                    </code>
+                </td>
+                <td class="px-4 py-3 text-sm text-zinc-500">
+                    {{ job.worker_id or '-' }}
+                </td>
+                <td class="px-4 py-3 text-sm text-zinc-500">
+                    {{ job.created_at|format_time_ago }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    {% if job.status == 'queued' %}
+                    <form action="/jobs/{{ job.id }}/cancel" method="post" class="inline">
+                        <button type="submit" class="text-xs text-red-400 hover:text-red-300">Cancel</button>
+                    </form>
+                    {% elif job.status == 'running' %}
+                    <form action="/jobs/{{ job.id }}/cancel" method="post" class="inline">
+                        <button type="submit" class="text-xs text-red-400 hover:text-red-300">Kill</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-12 text-center">
+    <div class="text-zinc-500 text-sm">No active jobs</div>
+    <div class="text-zinc-600 text-xs mt-2">Submit a job with <code class="text-zinc-400">whirr submit -- python train.py</code></div>
+</div>
+{% endif %}
+{% endblock %}

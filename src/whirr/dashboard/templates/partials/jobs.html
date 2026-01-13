@@ -1,0 +1,28 @@
+{% if jobs %}
+<div class="divide-y divide-zinc-800/50">
+    {% for job in jobs[:5] %}
+    <div class="px-3 py-2">
+        <div class="flex items-center gap-2">
+            {% if job.status == 'running' %}
+            <span class="text-[10px] text-zinc-400 uppercase">run</span>
+            {% elif job.status == 'queued' %}
+            <span class="text-[10px] text-zinc-500 uppercase">que</span>
+            {% endif %}
+            <span class="text-xs text-zinc-300 truncate">{{ job.name or '#' ~ job.id }}</span>
+        </div>
+        <div class="text-[10px] text-zinc-600 mt-0.5 truncate font-mono">
+            {{ job.command_argv|deserialize_json|join(' ') if job.command_argv else '-' }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% if jobs|length > 5 %}
+<div class="px-3 py-1.5 text-center border-t border-zinc-800/50">
+    <a href="/queue" class="text-[10px] text-zinc-600 hover:text-zinc-500">+{{ jobs|length - 5 }} more</a>
+</div>
+{% endif %}
+{% else %}
+<div class="px-3 py-6 text-center text-zinc-600 text-xs">
+    No active jobs
+</div>
+{% endif %}

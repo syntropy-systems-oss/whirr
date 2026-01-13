@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - whirr{% endblock %}
+
+{% block queue_badge %}
+{% if stats.queued > 0 %}
+<span class="ml-auto bg-zinc-700 text-zinc-300 text-xs px-2 py-0.5 rounded-full">{{ stats.queued }}</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div id="stats-container" hx-get="/partials/stats" hx-trigger="every 5s" hx-swap="innerHTML">
+    {% include "partials/stats.html" %}
+</div>
+
+<!-- Main Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+    <!-- Workers Section -->
+    <div class="lg:col-span-2">
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+            <div class="px-3 py-2 border-b border-zinc-800/50 flex items-center justify-between">
+                <h2 class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Workers</h2>
+                <span class="text-[10px] text-zinc-600">{{ stats.workers_online }}/{{ stats.workers_total }}</span>
+            </div>
+            <div id="workers-container" hx-get="/partials/workers" hx-trigger="every 3s" hx-swap="innerHTML">
+                {% include "partials/workers.html" %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Jobs -->
+    <div>
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+            <div class="px-3 py-2 border-b border-zinc-800/50 flex items-center justify-between">
+                <h2 class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Active Jobs</h2>
+                <a href="/queue" class="text-[10px] text-zinc-500 hover:text-zinc-400">all →</a>
+            </div>
+            <div id="jobs-container" hx-get="/partials/jobs" hx-trigger="every 3s" hx-swap="innerHTML">
+                {% include "partials/jobs.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Runs -->
+<div class="mt-4">
+    <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+        <div class="px-3 py-2 border-b border-zinc-800/50 flex items-center justify-between">
+            <h2 class="text-xs font-medium text-zinc-400 uppercase tracking-wide">Recent Runs</h2>
+            <a href="/runs" class="text-[10px] text-zinc-500 hover:text-zinc-400">all →</a>
+        </div>
+        <div id="recent-runs-container" hx-get="/partials/recent-runs" hx-trigger="every 5s" hx-swap="innerHTML">
+            {% include "partials/recent_runs.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

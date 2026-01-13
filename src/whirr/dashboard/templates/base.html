@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}whirr{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: {
+                            850: '#1f1f23',
+                            950: '#0c0c0e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Chart.js for metrics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        /* HTMX loading indicator */
+        .htmx-request .htmx-indicator {
+            opacity: 1;
+        }
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+    </style>
+</head>
+<body class="h-full bg-black text-zinc-200 font-sans">
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <div class="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col fixed h-full">
+            <div class="p-6">
+                <a href="/" class="flex items-center gap-2 text-zinc-200 text-lg font-semibold tracking-tight">
+                    <div class="w-6 h-6 bg-zinc-700 rounded flex items-center justify-center">
+                        <svg class="w-4 h-4 text-zinc-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    whirr
+                </a>
+                <div class="text-[10px] text-zinc-600 mt-0.5 font-mono">{{ version }}</div>
+            </div>
+
+            <nav class="flex-1 px-4 space-y-1">
+                <a href="/" class="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.url.path == '/' %}bg-zinc-800 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="/queue" class="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.url.path == '/queue' %}bg-zinc-800 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                    </svg>
+                    Queue
+                    {% block queue_badge %}{% endblock %}
+                </a>
+                <a href="/runs" class="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors {% if '/runs' in request.url.path %}bg-zinc-800 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                    </svg>
+                    Runs
+                </a>
+            </nav>
+
+            <div class="p-4 border-t border-zinc-800/50">
+                <div class="flex items-center gap-2 text-xs text-zinc-500">
+                    <div class="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                    Local
+                </div>
+                <div class="text-[10px] text-zinc-600 mt-0.5">SQLite</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="ml-64 flex-1 p-8">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

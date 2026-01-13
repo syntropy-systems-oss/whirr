@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}{{ run.name or run.id[:8] if run else 'Run' }} - whirr{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="bg-zinc-900/50 border border-zinc-800/50 rounded px-3 py-2 text-zinc-400 text-xs">
+    {{ error }}
+</div>
+{% elif run %}
+
+<!-- Header -->
+<div class="flex items-start justify-between mb-4">
+    <div>
+        <div class="flex items-center gap-2">
+            <a href="/runs" class="text-zinc-600 hover:text-zinc-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <h1 class="text-base font-medium text-zinc-200">{{ run.name or run.id[:8] }}</h1>
+            <span class="text-[10px] text-zinc-500 uppercase">{{ run.status }}</span>
+        </div>
+        <div class="text-[10px] text-zinc-600 mt-0.5 font-mono">{{ run.id }}</div>
+    </div>
+    <div class="text-right text-[10px] text-zinc-600">
+        <div>{{ run.started_at|format_time_ago }}</div>
+        <div>{{ run.get('duration_s')|format_duration }}</div>
+    </div>
+</div>
+
+<!-- Tags -->
+{% if run.tags %}
+<div class="flex gap-1 mb-4">
+    {% for tag in run.tags|deserialize_json %}
+    <span class="text-[10px] text-zinc-500">{{ tag }}</span>{% if not loop.last %}<span class="text-zinc-700 text-[10px]">·</span>{% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-4">
+        <!-- Metrics Chart -->
+        {% if metrics %}
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded p-3">
+            <h2 class="text-[10px] font-medium text-zinc-500 uppercase tracking-wide mb-3">Metrics</h2>
+            <div class="h-48">
+                <canvas id="metricsChart"></canvas>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Metrics Table -->
+        {% if metrics %}
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded overflow-hidden">
+            <div class="px-3 py-2 border-b border-zinc-800/50">
+                <h2 class="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Logged Metrics</h2>
+            </div>
+            <div class="overflow-x-auto max-h-64">
+                <table class="w-full">
+                    <thead class="sticky top-0 bg-zinc-950/80">
+                        <tr class="text-left text-[10px] text-zinc-600 uppercase tracking-wide border-b border-zinc-800/50">
+                            <th class="px-3 py-1.5 font-medium">Step</th>
+                            {% set sample = metrics[0] %}
+                            {% for key in sample.keys() if not key.startswith('_') %}
+                            <th class="px-3 py-1.5 font-medium">{{ key }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-800/30 font-mono text-xs">
+                        {% for m in metrics %}
+                        <tr class="hover:bg-zinc-800/20">
+                            <td class="px-3 py-1.5 text-zinc-500">{{ m._step if m._step is defined else m._idx }}</td>
+                            {% for key in sample.keys() if not key.startswith('_') %}
+                            <td class="px-3 py-1.5 text-zinc-400">
+                                {% if m[key] is defined %}
+                                    {% if m[key] is number %}
+                                        {{ "%.4f"|format(m[key]) if m[key] != m[key]|int else m[key] }}
+                                    {% else %}
+                                        {{ m[key] }}
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded px-3 py-6 text-center text-zinc-600 text-xs">
+            No metrics logged
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-4">
+        <!-- Config -->
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+            <div class="px-3 py-2 border-b border-zinc-800/50">
+                <h2 class="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Config</h2>
+            </div>
+            <div class="p-3">
+                {% if run.config %}
+                {% set config = run.config|deserialize_json %}
+                <dl class="space-y-1 text-xs">
+                    {% for key, value in config.items() %}
+                    <div class="flex justify-between">
+                        <dt class="text-zinc-600">{{ key }}</dt>
+                        <dd class="text-zinc-400 font-mono">{{ value }}</dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+                {% else %}
+                <div class="text-zinc-600 text-xs">No config</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Summary -->
+        {% if meta and meta.summary %}
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+            <div class="px-3 py-2 border-b border-zinc-800/50">
+                <h2 class="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Summary</h2>
+            </div>
+            <div class="p-3">
+                <dl class="space-y-1 text-xs">
+                    {% for key, value in meta.summary.items() %}
+                    <div class="flex justify-between">
+                        <dt class="text-zinc-600">{{ key }}</dt>
+                        <dd class="text-zinc-400 font-mono">
+                            {% if value is number %}
+                                {{ "%.4f"|format(value) if value != value|int else value }}
+                            {% else %}
+                                {{ value }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Run Info -->
+        <div class="bg-zinc-900/30 border border-zinc-800/50 rounded">
+            <div class="px-3 py-2 border-b border-zinc-800/50">
+                <h2 class="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Details</h2>
+            </div>
+            <div class="p-3">
+                <dl class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <dt class="text-zinc-600">Run Dir</dt>
+                        <dd class="text-zinc-500 font-mono text-[10px] truncate max-w-[140px]" title="{{ run.run_dir }}">{{ run.run_dir }}</dd>
+                    </div>
+                    {% if run.job_id %}
+                    <div class="flex justify-between">
+                        <dt class="text-zinc-600">Job ID</dt>
+                        <dd class="text-zinc-400 font-mono">#{{ run.job_id }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if run.exit_code is defined and run.exit_code is not none %}
+                    <div class="flex justify-between">
+                        <dt class="text-zinc-600">Exit Code</dt>
+                        <dd class="font-mono text-zinc-400">{{ run.exit_code }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if metrics and metrics|length > 0 %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('metricsChart').getContext('2d');
+    const metrics = {{ metrics|tojson }};
+
+    const numericKeys = Object.keys(metrics[0] || {}).filter(k => {
+        if (k.startsWith('_')) return false;
+        return typeof metrics[0][k] === 'number';
+    });
+
+    // Muted, professional colors
+    const colors = [
+        'rgb(161, 161, 170)',  // zinc-400
+        'rgb(113, 113, 122)',  // zinc-500
+        'rgb(82, 82, 91)',     // zinc-600
+        'rgb(63, 63, 70)',     // zinc-700
+    ];
+
+    const datasets = numericKeys.map((key, i) => ({
+        label: key,
+        data: metrics.map(m => m[key]),
+        borderColor: colors[i % colors.length],
+        backgroundColor: 'transparent',
+        tension: 0.1,
+        pointRadius: 1,
+        borderWidth: 1,
+    }));
+
+    const labels = metrics.map((m, i) => m._step !== undefined ? m._step : i);
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets,
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index',
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#71717a',
+                        boxWidth: 8,
+                        padding: 10,
+                        font: { size: 10 },
+                    }
+                },
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Step',
+                        color: '#52525b',
+                        font: { size: 10 },
+                    },
+                    ticks: { color: '#52525b', font: { size: 9 } },
+                    grid: { color: '#27272a' },
+                },
+                y: {
+                    ticks: { color: '#52525b', font: { size: 9 } },
+                    grid: { color: '#27272a' },
+                },
+            },
+        },
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -4,6 +4,7 @@ import atexit
 import json
 import os
 import shutil
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,105 @@ from whirr.db import complete_run, create_run, get_connection
 def utcnow() -> str:
     """Get current UTC time as ISO format string."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _capture_git_info() -> Optional[dict]:
+    """Capture git repository information."""
+    try:
+        # Check if we're in a git repo
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+
+        # Get commit hash
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+
+        # Get short hash
+        short_hash = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+
+        # Check if dirty (uncommitted changes)
+        dirty_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        is_dirty = bool(dirty_result.stdout.strip())
+
+        # Get branch name
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+
+        # Get remote URL (if any)
+        remote_result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        remote = remote_result.stdout.strip() if remote_result.returncode == 0 else None
+
+        return {
+            "commit": commit,
+            "short_hash": short_hash,
+            "branch": branch,
+            "dirty": is_dirty,
+            "remote": remote,
+        }
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return None
+
+
+def _capture_pip_freeze() -> Optional[list[str]]:
+    """Capture installed packages via pip freeze."""
+    try:
+        result = subprocess.run(
+            ["pip", "freeze"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            packages = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+            return packages
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        pass
+
+    # Try python -m pip as fallback
+    try:
+        import sys
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "freeze"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            packages = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+            return packages
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        pass
+
+    return None
 
 
 class Run:
@@ -36,6 +136,8 @@ class Run:
         job_id: Optional[int] = None,
         system_metrics: bool = True,
         system_metrics_interval: float = 10.0,
+        capture_git: bool = True,
+        capture_pip: bool = True,
     ):
         """
         Initialize a run.
@@ -88,6 +190,24 @@ class Run:
         with open(self._config_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
+        # Capture git info
+        self.git_info = None
+        if capture_git:
+            self.git_info = _capture_git_info()
+            if self.git_info:
+                git_path = self.run_dir / "git.json"
+                with open(git_path, "w") as f:
+                    json.dump(self.git_info, f, indent=2)
+
+        # Capture pip freeze
+        self.pip_packages = None
+        if capture_pip:
+            self.pip_packages = _capture_pip_freeze()
+            if self.pip_packages:
+                requirements_path = self.run_dir / "requirements.txt"
+                with open(requirements_path, "w") as f:
+                    f.write("\n".join(self.pip_packages) + "\n")
+
         # Write initial metadata
         self._write_meta()
 
@@ -135,6 +255,16 @@ class Run:
             "metrics_file": "metrics.jsonl",
             "artifacts_dir": "artifacts",
         }
+
+        # Add git info if captured
+        if hasattr(self, "git_info") and self.git_info:
+            meta["git"] = self.git_info
+            meta["git_file"] = "git.json"
+
+        # Add pip packages indicator if captured
+        if hasattr(self, "pip_packages") and self.pip_packages:
+            meta["requirements_file"] = "requirements.txt"
+            meta["pip_packages_count"] = len(self.pip_packages)
 
         if self._finished:
             meta["finished_at"] = self._finished_at
@@ -270,6 +400,8 @@ def init(
     config: Optional[dict[str, Any]] = None,
     tags: Optional[list[str]] = None,
     system_metrics: bool = True,
+    capture_git: bool = True,
+    capture_pip: bool = True,
 ) -> Run:
     """
     Initialize a new whirr run.
@@ -282,6 +414,8 @@ def init(
         config: Configuration dictionary (hyperparameters, etc.)
         tags: List of tags for filtering
         system_metrics: Enable automatic system metrics collection (GPU, CPU)
+        capture_git: Capture git commit hash and dirty state
+        capture_pip: Capture pip freeze snapshot to requirements.txt
 
     Returns:
         A Run instance for logging metrics
@@ -298,7 +432,14 @@ def init(
     """
     global _active_run
 
-    run = Run(name=name, config=config, tags=tags, system_metrics=system_metrics)
+    run = Run(
+        name=name,
+        config=config,
+        tags=tags,
+        system_metrics=system_metrics,
+        capture_git=capture_git,
+        capture_pip=capture_pip,
+    )
     _active_run = run
 
     # Register atexit handler for auto-finish

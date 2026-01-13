@@ -1,0 +1,18 @@
+<div class="grid grid-cols-4 gap-3">
+    <div class="bg-zinc-900/50 border border-zinc-800/50 rounded px-3 py-2">
+        <div class="text-xs text-zinc-500 uppercase tracking-wide">Running</div>
+        <div class="text-lg font-medium text-zinc-200 mt-0.5">{{ stats.running }}</div>
+    </div>
+    <div class="bg-zinc-900/50 border border-zinc-800/50 rounded px-3 py-2">
+        <div class="text-xs text-zinc-500 uppercase tracking-wide">Queued</div>
+        <div class="text-lg font-medium text-zinc-200 mt-0.5">{{ stats.queued }}</div>
+    </div>
+    <div class="bg-zinc-900/50 border border-zinc-800/50 rounded px-3 py-2">
+        <div class="text-xs text-zinc-500 uppercase tracking-wide">Completed</div>
+        <div class="text-lg font-medium text-zinc-200 mt-0.5">{{ stats.completed }}</div>
+    </div>
+    <div class="bg-zinc-900/50 border border-zinc-800/50 rounded px-3 py-2">
+        <div class="text-xs text-zinc-500 uppercase tracking-wide">Workers</div>
+        <div class="text-lg font-medium text-zinc-200 mt-0.5">{{ stats.workers_online }}<span class="text-zinc-500 text-sm">/{{ stats.workers_total }}</span></div>
+    </div>
+</div>

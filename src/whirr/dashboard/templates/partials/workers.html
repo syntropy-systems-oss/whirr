@@ -1,0 +1,33 @@
+{% if workers %}
+<div class="divide-y divide-zinc-800/50">
+    {% for worker in workers %}
+    <div class="px-3 py-2 flex items-center gap-3">
+        <div class="flex-shrink-0">
+            {% if worker.status == 'idle' %}
+            <div class="w-1.5 h-1.5 rounded-full bg-zinc-400"></div>
+            {% elif worker.status == 'busy' %}
+            <div class="w-1.5 h-1.5 rounded-full bg-zinc-300"></div>
+            {% else %}
+            <div class="w-1.5 h-1.5 rounded-full bg-zinc-600"></div>
+            {% endif %}
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-300 truncate font-mono">{{ worker.id }}</div>
+            <div class="text-[10px] text-zinc-600">
+                {{ worker.hostname }}{% if worker.gpu_id is not none %} · GPU {{ worker.gpu_id }}{% endif %}
+            </div>
+        </div>
+        <div class="text-right">
+            {% if worker.status == 'busy' and worker.current_job_id %}
+            <div class="text-[10px] text-zinc-400 font-mono">#{{ worker.current_job_id }}</div>
+            {% endif %}
+            <div class="text-[10px] text-zinc-600">{{ worker.heartbeat_at|format_time_ago }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="px-3 py-6 text-center text-zinc-600 text-xs">
+    No workers. Run <code class="text-zinc-500 font-mono">whirr worker</code>
+</div>
+{% endif %}

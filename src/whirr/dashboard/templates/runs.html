@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Runs - whirr{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-white">Runs</h1>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-zinc-500">Status:</span>
+            <div class="flex gap-1">
+                <a href="/runs" class="px-2 py-1 text-xs rounded {% if not filter_status %}bg-zinc-700 text-white{% else %}text-zinc-400 hover:text-white{% endif %}">All</a>
+                <a href="/runs?status=completed" class="px-2 py-1 text-xs rounded {% if filter_status == 'completed' %}bg-emerald-500/20 text-emerald-400{% else %}text-zinc-400 hover:text-white{% endif %}">Completed</a>
+                <a href="/runs?status=failed" class="px-2 py-1 text-xs rounded {% if filter_status == 'failed' %}bg-red-500/20 text-red-400{% else %}text-zinc-400 hover:text-white{% endif %}">Failed</a>
+                <a href="/runs?status=running" class="px-2 py-1 text-xs rounded {% if filter_status == 'running' %}bg-amber-500/20 text-amber-400{% else %}text-zinc-400 hover:text-white{% endif %}">Running</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if runs %}
+<div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <table class="w-full">
+        <thead>
+            <tr class="text-left text-xs text-zinc-500 border-b border-zinc-800 bg-zinc-950">
+                <th class="px-4 py-3 font-medium">Run</th>
+                <th class="px-4 py-3 font-medium">Status</th>
+                <th class="px-4 py-3 font-medium">Duration</th>
+                <th class="px-4 py-3 font-medium">Started</th>
+                <th class="px-4 py-3 font-medium">Config</th>
+                <th class="px-4 py-3 font-medium"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-800">
+            {% for run in runs %}
+            <tr class="hover:bg-zinc-800/50">
+                <td class="px-4 py-3">
+                    <div class="text-sm text-white font-medium">{{ run.name or run.id[:8] }}</div>
+                    <div class="text-xs text-zinc-500 font-mono">{{ run.id[:12] }}...</div>
+                    {% if run.tags %}
+                    <div class="flex gap-1 mt-1">
+                        {% for tag in run.tags|deserialize_json %}
+                        <span class="text-xs bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if run.status == 'completed' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400">
+                        completed
+                    </span>
+                    {% elif run.status == 'failed' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-400">
+                        failed
+                    </span>
+                    {% elif run.status == 'running' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 animate-pulse"></span>
+                        running
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-700 text-zinc-300">
+                        {{ run.status }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-sm text-zinc-400">
+                    {{ run.get('duration_s')|format_duration }}
+                </td>
+                <td class="px-4 py-3 text-sm text-zinc-500">
+                    {{ run.started_at|format_time_ago }}
+                </td>
+                <td class="px-4 py-3">
+                    {% if run.config %}
+                    {% set config = run.config|deserialize_json %}
+                    <div class="text-xs text-zinc-500 max-w-xs truncate">
+                        {% for key, value in config.items() %}
+                        <span class="text-zinc-400">{{ key }}</span>=<span class="text-zinc-500">{{ value }}</span>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="text-xs text-zinc-600">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <a href="/runs/{{ run.id }}" class="text-xs text-indigo-400 hover:text-indigo-300">View →</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-12 text-center">
+    <div class="text-zinc-500 text-sm">No runs found</div>
+    {% if filter_status %}
+    <div class="text-zinc-600 text-xs mt-2">Try <a href="/runs" class="text-indigo-400 hover:text-indigo-300">clearing filters</a></div>
+    {% else %}
+    <div class="text-zinc-600 text-xs mt-2">Runs will appear here when jobs complete</div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

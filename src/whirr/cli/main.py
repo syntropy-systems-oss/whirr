@@ -3,7 +3,10 @@
 import typer
 
 from whirr.cli.cancel import cancel
+from whirr.cli.compare import compare
+from whirr.cli.dashboard import dashboard
 from whirr.cli.doctor import doctor
+from whirr.cli.export import export
 from whirr.cli.init_cmd import init
 from whirr.cli.logs import logs
 from whirr.cli.retry import retry
@@ -36,6 +39,9 @@ app.command()(watch)
 app.command()(runs)
 app.command()(show)
 app.command()(doctor)
+app.command()(dashboard)
+app.command()(compare)
+app.command(name="export")(export)
 
 
 if __name__ == "__main__":

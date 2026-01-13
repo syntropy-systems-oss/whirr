@@ -1,0 +1,55 @@
+{% if runs %}
+<div class="overflow-x-auto">
+    <table class="w-full">
+        <thead>
+            <tr class="text-left text-[10px] text-zinc-600 uppercase tracking-wide border-b border-zinc-800/50">
+                <th class="px-3 py-1.5 font-medium">Run</th>
+                <th class="px-3 py-1.5 font-medium">Status</th>
+                <th class="px-3 py-1.5 font-medium">Duration</th>
+                <th class="px-3 py-1.5 font-medium">Started</th>
+                <th class="px-3 py-1.5 font-medium"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-800/30">
+            {% for run in runs %}
+            <tr class="hover:bg-zinc-800/20">
+                <td class="px-3 py-2">
+                    <div class="text-xs text-zinc-300">{{ run.name or run.id[:8] }}</div>
+                    {% if run.tags %}
+                    <div class="flex gap-1 mt-0.5">
+                        {% for tag in run.tags|deserialize_json %}
+                        <span class="text-[10px] text-zinc-600">{{ tag }}</span>{% if not loop.last %}<span class="text-zinc-700">·</span>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2">
+                    {% if run.status == 'completed' %}
+                    <span class="text-[10px] text-zinc-400">done</span>
+                    {% elif run.status == 'failed' %}
+                    <span class="text-[10px] text-zinc-500">fail</span>
+                    {% elif run.status == 'running' %}
+                    <span class="text-[10px] text-zinc-400">run</span>
+                    {% else %}
+                    <span class="text-[10px] text-zinc-500">{{ run.status }}</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2 text-xs text-zinc-500 font-mono">
+                    {{ run.get('duration_s')|format_duration }}
+                </td>
+                <td class="px-3 py-2 text-xs text-zinc-600">
+                    {{ run.started_at|format_time_ago }}
+                </td>
+                <td class="px-3 py-2 text-right">
+                    <a href="/runs/{{ run.id }}" class="text-[10px] text-zinc-500 hover:text-zinc-400">→</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="px-3 py-6 text-center text-zinc-600 text-xs">
+    No runs yet
+</div>
+{% endif %}
