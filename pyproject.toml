@@ -4,21 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "whirr"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local experiment orchestration. Queue jobs, track metrics, wake up to results."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = "MIT"
 authors = [
-    { name = "whirr contributors" }
+    { name = "Tang Tensor Trends" }
 ]
-keywords = ["ml", "experiment", "tracking", "orchestration"]
+keywords = ["ml", "experiment", "tracking", "orchestration", "wandb", "mlflow"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -40,8 +41,12 @@ dev = [
 whirr = "whirr.cli.main:app"
 
 [project.urls]
-Homepage = "https://whirr.run"
-Repository = "https://github.com/whirr/whirr"
+Homepage = "https://github.com/Tang-Tensor-Trends/whirr"
+Repository = "https://github.com/Tang-Tensor-Trends/whirr"
+Issues = "https://github.com/Tang-Tensor-Trends/whirr/issues"
+
+[tool.hatch.version]
+path = "src/whirr/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/whirr"]
