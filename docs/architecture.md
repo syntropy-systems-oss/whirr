@@ -309,11 +309,148 @@ The SQLite database is an **index**, not the source of truth. The filesystem is:
 - No authentication
 - File permissions are the security boundary
 
-### Future (v0.4+)
+### Server Mode (v0.4+)
 
-- Server mode with HTTP API
-- Shared token authentication
-- Lease-based job claims
+- HTTP API for multi-machine orchestration
+- PostgreSQL for scalable job coordination
+- Lease-based job claims with heartbeat renewal
+
+## Server Mode Architecture (v0.4)
+
+For multi-machine setups, whirr supports a server mode where a central server coordinates jobs across distributed workers.
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Head Node                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
+│  │   whirr      │  │   FastAPI    │  │      PostgreSQL       │ │
+│  │   server     │──│   HTTP API   │──│  (Docker Compose)     │ │
+│  │              │  │              │  │                       │ │
+│  └──────────────┘  └──────────────┘  └───────────────────────┘ │
+│         │                                       │               │
+│         └───────────────┬───────────────────────┘               │
+│                         │                                       │
+│              ┌──────────▼──────────┐                           │
+│              │   Shared Filesystem │                           │
+│              │   /data/whirr/runs  │                           │
+│              └─────────────────────┘                           │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  GPU Worker 1   │ │  GPU Worker 2   │ │  GPU Worker N   │
+│  ┌───────────┐  │ │  ┌───────────┐  │ │  ┌───────────┐  │
+│  │  whirr    │  │ │  │  whirr    │  │ │  │  whirr    │  │
+│  │  worker   │  │ │  │  worker   │  │ │  │  worker   │  │
+│  │  (polls)  │  │ │  │  (polls)  │  │ │  │  (polls)  │  │
+│  └───────────┘  │ │  └───────────┘  │ │  └───────────┘  │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+### Key Components
+
+**Head Node:**
+- Runs `whirr server` (FastAPI application)
+- PostgreSQL database for job coordination
+- Serves HTTP API for workers
+
+**Workers:**
+- Bare-bones processes that poll for jobs
+- Connect via HTTP API (no direct database access)
+- Write output to shared filesystem
+
+**Shared Filesystem:**
+- NFS or other shared mount accessible to all nodes
+- Workers write run data directly here
+- Head node can read results
+
+### Lease-Based Job Claims
+
+In server mode, jobs use lease-based claims instead of heartbeats:
+
+```
+Worker                          Server
+   │                              │
+   │ ──── claim job ────────────► │  (server assigns lease, e.g., 60s)
+   │ ◄─── job + lease_expires ─── │
+   │                              │
+   │ ──── renew lease (30s) ────► │  (extends lease by 60s)
+   │ ◄─── new lease_expires ───── │
+   │                              │
+   │ ──── renew lease (30s) ────► │
+   │                              │
+   │     (worker dies)            │
+   │                              │
+   │                              │  (lease expires after 60s)
+   │                              │  → job requeued automatically
+```
+
+**Benefits:**
+- Works across network boundaries
+- Server can detect failed workers without heartbeats
+- Atomic claims with `FOR UPDATE SKIP LOCKED`
+
+### Database Abstraction
+
+whirr supports both SQLite (local) and PostgreSQL (server mode):
+
+```python
+class Database(ABC):
+    @abstractmethod
+    def claim_job(self, worker_id: str) -> Optional[dict]: ...
+    @abstractmethod
+    def complete_job(self, job_id: int, exit_code: int): ...
+    @abstractmethod
+    def renew_lease(self, job_id: int, worker_id: str): ...
+
+class SQLiteDatabase(Database): ...  # Local mode
+class PostgresDatabase(Database): ... # Server mode
+```
+
+### HTTP API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/workers/register` | POST | Register a worker |
+| `/api/v1/jobs/claim` | POST | Claim next available job |
+| `/api/v1/jobs/{id}/heartbeat` | POST | Renew job lease |
+| `/api/v1/jobs/{id}/complete` | POST | Mark job complete |
+| `/api/v1/jobs` | POST | Submit a new job |
+| `/api/v1/status` | GET | Get queue status |
+| `/health` | GET | Health check |
+
+### Docker Compose Deployment
+
+The recommended deployment uses Docker Compose:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: whirr
+      POSTGRES_USER: whirr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whirr}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  whirr-server:
+    build: .
+    command: whirr server --host 0.0.0.0 --port 8080
+    environment:
+      WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD}@postgres:5432/whirr
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+```
+
+---
 
 ## Extension Points
 
@@ -324,7 +461,8 @@ The SQLite database is an **index**, not the source of truth. The filesystem is:
 | New CLI command | `src/whirr/cli/` + register in `main.py` |
 | New metric type | Extend `Run.log()` in `run.py` |
 | System metrics | Add `system_metrics.py` (v0.2) |
-| Dashboard | Add `dashboard/` with FastAPI + React (v0.3) |
+| Dashboard | `src/whirr/cli/dashboard.py` (v0.3) |
+| Server API | `src/whirr/server/` (v0.4) |
 
 ### Database Migrations
 

@@ -15,6 +15,9 @@ Local experiment orchestration. Queue jobs, track metrics, wake up to results.
 - **Multi-GPU Support** - One worker per GPU, automatic device assignment
 - **Process Safety** - Orphan prevention with PDEATHSIG, graceful shutdown
 - **Concurrent Access** - SQLite WAL mode for safe multi-process access
+- **Web Dashboard** - Interactive UI for viewing runs and comparing metrics
+- **Reproducibility** - Automatic capture of git commit and pip freeze
+- **Server Mode** - Multi-machine orchestration with PostgreSQL backend
 
 ## Installation
 
@@ -22,12 +25,25 @@ Local experiment orchestration. Queue jobs, track metrics, wake up to results.
 pip install whirr
 ```
 
+Optional dependencies:
+
+```bash
+# For dashboard
+pip install whirr[dashboard]
+
+# For server mode (PostgreSQL, HTTP API)
+pip install whirr[server]
+
+# For all features
+pip install whirr[all]
+```
+
 Or install from source:
 
 ```bash
 git clone https://github.com/syntropy-systems-oss/whirr.git
 cd whirr
-pip install -e .
+pip install -e ".[all]"
 ```
 
 ## Quick Start
@@ -133,6 +149,36 @@ python train.py  # Uses whirr.init() directly
 whirr runs       # Shows the run
 ```
 
+## Server Mode (Multi-Machine)
+
+For distributed setups with multiple GPU machines:
+
+### Start the Server
+
+```bash
+# Using Docker Compose (recommended)
+docker-compose up -d
+
+# Or manually with PostgreSQL
+whirr server --database-url postgresql://user:pass@localhost:5432/whirr
+```
+
+### Start Workers on GPU Machines
+
+```bash
+# On each GPU machine, connect to the server
+whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr
+
+# With GPU assignment
+whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr --gpu 0
+```
+
+### Submit Jobs Remotely
+
+```bash
+whirr submit --server http://head-node:8080 -- python train.py --lr 0.01
+```
+
 ## Project Structure
 
 ```
@@ -160,6 +206,10 @@ your-project/
 | `whirr logs ID` | View job output |
 | `whirr cancel ID` | Cancel a job |
 | `whirr runs` | List all runs |
+| `whirr dashboard` | Launch web dashboard |
+| `whirr compare ID1 ID2` | Compare runs side-by-side |
+| `whirr export ID` | Export run data |
+| `whirr server` | Start multi-machine server |
 | `whirr doctor` | Diagnose configuration issues |
 
 ## Documentation

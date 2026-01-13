@@ -55,11 +55,12 @@ whirr submit [OPTIONS] -- COMMAND [ARGS]...
 |--------|-------|-------------|
 | `--name TEXT` | `-n` | Job name (for identification) |
 | `--tags TEXT` | `-t` | Comma-separated tags |
+| `--server URL` | `-s` | Server URL for remote submission |
 
 **Examples:**
 
 ```bash
-# Basic submission
+# Basic submission (local mode)
 whirr submit -- python train.py
 
 # With name
@@ -67,6 +68,9 @@ whirr submit --name "baseline-v1" -- python train.py
 
 # With name and tags
 whirr submit -n "lora-r8" -t "lora,llama,sweep" -- python train.py --lora-r 8
+
+# Remote submission to server
+whirr submit --server http://head-node:8080 -- python train.py
 
 # Complex command
 whirr submit -- python -m torch.distributed.launch --nproc_per_node=1 train.py
@@ -76,6 +80,7 @@ whirr submit -- python -m torch.distributed.launch --nproc_per_node=1 train.py
 - The `--` separator is required
 - The command is stored as-is and executed in the current working directory
 - Returns the job ID on success
+- Use `--server` for multi-machine setups with a central whirr server
 
 ---
 
@@ -129,19 +134,29 @@ whirr worker [OPTIONS]
 
 **Options:**
 
-| Option | Description |
-|--------|-------------|
-| `--device INT` | GPU device index (for multi-GPU setups) |
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--gpu INT` | `-g` | GPU device index (for multi-GPU setups) |
+| `--server URL` | `-s` | Server URL for remote mode |
+| `--data-dir PATH` | `-d` | Data directory for runs (required for remote mode) |
 
-**Behavior:**
+**Local Mode (default):**
 
-1. Claims the next queued job atomically
+1. Claims the next queued job atomically from local SQLite database
 2. Runs it in a subprocess with:
    - Separate process group (for clean termination)
    - stdout/stderr captured to `output.log`
 3. Sends heartbeat every 30 seconds
 4. Marks job complete/failed when done
 5. Repeats until queue is empty
+
+**Remote Mode (--server):**
+
+1. Connects to the whirr server via HTTP API
+2. Claims jobs from the central queue
+3. Writes output to shared filesystem (--data-dir)
+4. Sends heartbeats to renew job lease
+5. Reports completion to server
 
 **Graceful Shutdown:**
 
@@ -153,14 +168,21 @@ Press `Ctrl+C` twice to force stop:
 - Kills the current job immediately
 - Exits
 
-**Multi-GPU Example:**
+**Examples:**
 
 ```bash
-# Terminal 1
-CUDA_VISIBLE_DEVICES=0 whirr worker --device 0
+# Local mode - single GPU
+whirr worker
 
-# Terminal 2
-CUDA_VISIBLE_DEVICES=1 whirr worker --device 1
+# Local mode - multi-GPU
+CUDA_VISIBLE_DEVICES=0 whirr worker --gpu 0 &
+CUDA_VISIBLE_DEVICES=1 whirr worker --gpu 1 &
+
+# Remote mode - connect to server
+whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr
+
+# Remote mode with GPU assignment
+whirr worker --server http://head:8080 --data-dir /data/whirr --gpu 0
 ```
 
 ---
@@ -501,6 +523,150 @@ whirr doctor
 
 ---
 
+### `whirr dashboard`
+
+Launch an interactive web dashboard for viewing runs and metrics.
+
+```bash
+whirr dashboard [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--port INT` | `-p` | Port to serve on (default: 8501) |
+
+**Examples:**
+
+```bash
+# Start dashboard on default port
+whirr dashboard
+
+# Start on custom port
+whirr dashboard --port 8080
+```
+
+**Features:**
+- View all runs in a filterable table
+- Compare metrics across runs side-by-side
+- Interactive charts for metrics over time
+- View run configuration and summary
+
+**Notes:**
+- Requires `streamlit` package (included in `whirr[dashboard]`)
+- Opens in your default web browser
+- Press `Ctrl+C` to stop the dashboard
+
+---
+
+### `whirr compare`
+
+Compare metrics across multiple runs.
+
+```bash
+whirr compare RUN_IDS... [OPTIONS]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `RUN_IDS` | Two or more run IDs to compare |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--metric TEXT` | `-m` | Specific metric to compare (default: all) |
+| `--output TEXT` | `-o` | Output format: table, csv, json (default: table) |
+
+**Examples:**
+
+```bash
+# Compare two runs
+whirr compare job-1 job-2
+
+# Compare specific metric
+whirr compare job-1 job-2 job-3 --metric loss
+
+# Export comparison to CSV
+whirr compare job-1 job-2 --output csv > comparison.csv
+```
+
+---
+
+### `whirr export`
+
+Export run data to various formats.
+
+```bash
+whirr export RUN_ID [OPTIONS]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `RUN_ID` | Run ID to export |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--format TEXT` | `-f` | Output format: json, csv, wandb (default: json) |
+| `--output PATH` | `-o` | Output file path (default: stdout) |
+
+**Examples:**
+
+```bash
+# Export run to JSON
+whirr export job-1 --format json > run.json
+
+# Export metrics to CSV
+whirr export job-1 --format csv --output metrics.csv
+```
+
+---
+
+### `whirr server`
+
+Start the whirr server for multi-machine orchestration.
+
+```bash
+whirr server [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--port INT` | `-p` | Port to listen on (default: 8080) |
+| `--host TEXT` | | Host to bind to (default: 127.0.0.1) |
+| `--database-url TEXT` | | PostgreSQL connection URL |
+| `--data-dir PATH` | `-d` | Data directory for runs |
+| `--reload` | | Enable auto-reload for development |
+
+**Examples:**
+
+```bash
+# Start server with SQLite (development)
+whirr server --port 8080
+
+# Start server with PostgreSQL
+whirr server --database-url postgresql://user:pass@localhost:5432/whirr
+
+# Start with Docker Compose (recommended for production)
+docker-compose up -d
+```
+
+**Notes:**
+- Requires `whirr[server]` dependencies (FastAPI, uvicorn, psycopg2)
+- For production, use with PostgreSQL via Docker Compose
+- Workers connect via `--server` flag
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -517,5 +683,7 @@ whirr doctor
 | `WHIRR_JOB_ID` | Set by worker when running a job |
 | `WHIRR_RUN_DIR` | Set by worker - path to run directory |
 | `WHIRR_RUN_ID` | Set by worker - run ID |
+| `WHIRR_SERVER_URL` | Server URL for remote mode (alternative to `--server` flag) |
+| `WHIRR_DATA_DIR` | Data directory for remote workers (alternative to `--data-dir` flag) |
 
 These are automatically set when your script runs via `whirr worker`. You typically don't need to use them directly - `whirr.init()` detects them automatically.

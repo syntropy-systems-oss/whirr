@@ -30,7 +30,9 @@ whirr.init(
     name: str = None,
     config: dict = None,
     tags: list[str] = None,
-    system_metrics: bool = True
+    system_metrics: bool = True,
+    capture_git: bool = True,
+    capture_pip: bool = True
 ) -> Run
 ```
 
@@ -42,6 +44,8 @@ whirr.init(
 | `config` | `dict` | Configuration/hyperparameters to record |
 | `tags` | `list[str]` | Tags for organizing runs |
 | `system_metrics` | `bool` | Enable automatic system metrics collection (default: True) |
+| `capture_git` | `bool` | Capture git commit hash and dirty state (default: True) |
+| `capture_pip` | `bool` | Capture pip freeze snapshot to requirements.txt (default: True) |
 
 **Returns:** A `Run` instance
 
@@ -60,6 +64,13 @@ run = whirr.init(
     },
     tags=["baseline", "resnet"]
 )
+
+# Disable environment capture for faster startup
+run = whirr.init(
+    name="quick-test",
+    capture_git=False,
+    capture_pip=False
+)
 ```
 
 **Behavior:**
@@ -67,6 +78,8 @@ run = whirr.init(
 - Detects if running inside a whirr worker (via `WHIRR_JOB_ID` env var)
 - If in worker context: links to the job's run directory
 - If direct execution: creates a new run with `local-*` ID
+- If `capture_git=True`: records git commit hash, branch, and dirty state
+- If `capture_pip=True`: saves pip freeze output to `requirements.txt` in run directory
 
 ---
 
@@ -364,6 +377,42 @@ Fields (when available):
 - GPU metrics only available on systems with NVIDIA GPUs and nvidia-smi
 - CPU/memory metrics require the `psutil` package (`pip install whirr[metrics]`)
 - Disable with `whirr.init(system_metrics=False)`
+
+### `git_info` in `meta.json`
+
+When `capture_git=True`, git information is stored in `meta.json`:
+
+```json
+{
+  "git_info": {
+    "commit": "a1b2c3d4e5f6...",
+    "branch": "main",
+    "dirty": false,
+    "remote_url": "git@github.com:user/repo.git"
+  }
+}
+```
+
+**Notes:**
+- `dirty`: True if there are uncommitted changes
+- Only captured if the working directory is a git repository
+- Disable with `whirr.init(capture_git=False)`
+
+### `requirements.txt`
+
+When `capture_pip=True`, pip freeze output is saved:
+
+```
+torch==2.1.0
+numpy==1.24.0
+whirr==0.4.0
+...
+```
+
+**Notes:**
+- Captures exact package versions for reproducibility
+- Saved to `{run_dir}/requirements.txt`
+- Disable with `whirr.init(capture_pip=False)`
 
 ---
 

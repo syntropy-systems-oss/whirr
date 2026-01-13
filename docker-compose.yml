@@ -1,0 +1,57 @@
+# docker-compose.yml for whirr server mode
+#
+# Usage:
+#   docker-compose up -d          # Start Postgres + whirr server
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop services
+#   docker-compose down -v        # Stop and remove data volumes
+#
+# Configuration via environment variables:
+#   WHIRR_PORT         - Server port (default: 8080)
+#   POSTGRES_PASSWORD  - Database password (default: whirr)
+#
+# Workers connect with:
+#   whirr worker --server http://localhost:8080 --data-dir /path/to/shared/data
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: whirr
+      POSTGRES_USER: whirr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whirr}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whirr -d whirr"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  whirr-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: whirr server --host 0.0.0.0 --port 8080
+    environment:
+      WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD:-whirr}@postgres:5432/whirr
+      WHIRR_DATA_DIR: /data
+    volumes:
+      - whirr_data:/data
+    ports:
+      - "${WHIRR_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  whirr_data:
+    driver: local
