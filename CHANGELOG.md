@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.2.0...v0.3.0) (2026-01-13)
+
+
+### Features
+
+* add dashboard, compare, export commands and reproducibility features ([fa63054](https://github.com/syntropy-systems-oss/whirr/commit/fa63054a61693d45abb33f7ee5d091b5cd5cf74e))
+* add server mode for multi-machine orchestration (v0.4) ([8fc53aa](https://github.com/syntropy-systems-oss/whirr/commit/8fc53aaeeb9b596607401464871123d2a031ef44))
+
+
+### Bug Fixes
+
+* SQLite threading, test assertions, and version numbering ([5926b96](https://github.com/syntropy-systems-oss/whirr/commit/5926b96a4240327429c6025de2d3808c89ca2d0c))
+
 ## [0.2.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.1.0...v0.2.0) (2026-01-13)
 
 
