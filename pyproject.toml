@@ -41,9 +41,9 @@ dev = [
 whirr = "whirr.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/SynotropySystems/whirr"
-Repository = "https://github.com/SynotropySystems/whirr"
-Issues = "https://github.com/SynotropySystems/whirr/issues"
+Homepage = "https://github.com/syntropy-systems-oss/whirr"
+Repository = "https://github.com/syntropy-systems-oss/whirr"
+Issues = "https://github.com/syntropy-systems-oss/whirr/issues"
 
 [tool.hatch.version]
 path = "src/whirr/__init__.py"
