@@ -17,6 +17,7 @@ from whirr.db import (
     complete_job,
     get_connection,
     register_worker,
+    requeue_orphaned_jobs,
     unregister_worker,
     update_job_heartbeat,
     update_job_process_info,
@@ -76,6 +77,13 @@ def worker(
     conn = get_connection(db_path)
     try:
         register_worker(conn, worker_id, pid, hostname, gpu)
+
+        # Check for and requeue orphaned jobs
+        orphaned = requeue_orphaned_jobs(conn, config.heartbeat_timeout)
+        if orphaned:
+            console.print(f"[yellow]Requeued {len(orphaned)} orphaned job(s)[/yellow]")
+            for job in orphaned:
+                console.print(f"  - Job #{job['id']}: {job['name'] or 'unnamed'} (attempt {job['attempt'] + 1})")
     finally:
         conn.close()
 

@@ -240,6 +240,42 @@ whirr cancel --all-queued
 
 ---
 
+### `whirr retry`
+
+Retry a failed or cancelled job.
+
+```bash
+whirr retry JOB_ID
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `JOB_ID` | Job ID to retry |
+
+**Behavior:**
+- Creates a new job with the same command, workdir, name, and tags
+- Sets `parent_job_id` to link to the original job
+- Increments the `attempt` counter
+
+**Examples:**
+
+```bash
+# Retry job #5
+whirr retry 5
+# Output: Created retry job #8 (attempt 2 of job #5)
+
+# Check the retry
+whirr status 8
+```
+
+**Notes:**
+- Can only retry jobs with status `failed` or `cancelled`
+- Retrying a `running` or `queued` job will fail
+
+---
+
 ### `whirr runs`
 
 List experiment runs.
@@ -300,6 +336,143 @@ whirr show RUN_ID
 whirr show job-1
 whirr show local-2024  # Prefix match works
 ```
+
+---
+
+### `whirr sweep`
+
+Generate and submit jobs from a sweep configuration file.
+
+```bash
+whirr sweep CONFIG_FILE [OPTIONS]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `CONFIG_FILE` | Path to YAML sweep configuration |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--prefix TEXT` | Prefix for generated job names |
+| `--dry-run` | Show jobs without submitting |
+
+**Sweep Configuration (YAML):**
+
+```yaml
+# sweep.yaml
+program: python train.py
+name: lr-sweep
+method: grid  # or "random"
+max_runs: 10  # only for random method
+
+parameters:
+  lr:
+    values: [0.01, 0.001, 0.0001]
+  batch_size:
+    values: [16, 32, 64]
+  dropout:
+    distribution: uniform
+    min: 0.1
+    max: 0.5
+```
+
+**Parameter Types:**
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| Discrete | `values: [...]` | List of specific values |
+| Uniform | `distribution: uniform`, `min`, `max` | Float in range |
+| Log Uniform | `distribution: log_uniform`, `min`, `max` | Log-scale float |
+| Int Uniform | `distribution: int_uniform`, `min`, `max` | Integer in range |
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `grid` | All combinations of discrete values |
+| `random` | Random sampling (requires `max_runs`) |
+
+**Examples:**
+
+```bash
+# Preview what jobs will be created
+whirr sweep sweep.yaml --dry-run
+
+# Submit all sweep jobs
+whirr sweep sweep.yaml
+
+# With custom prefix
+whirr sweep sweep.yaml --prefix "experiment-v2"
+```
+
+**Generated Commands:**
+
+For a config with `program: python train.py` and parameters `lr` and `batch_size`:
+
+```bash
+python train.py --lr 0.01 --batch_size 16
+python train.py --lr 0.01 --batch_size 32
+# ... etc
+```
+
+---
+
+### `whirr watch`
+
+Watch job and worker status with live updates.
+
+```bash
+whirr watch [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--interval FLOAT` | `-i` | Refresh interval in seconds (default: 2.0) |
+
+**Display:**
+
+Shows two tables that update live:
+
+1. **Jobs Table** - All active jobs (queued + running)
+2. **Workers Table** - All registered workers
+
+```
+                         Jobs
+┌────┬──────────┬─────────┬─────────┬─────────────────┐
+│ ID │ Name     │ Status  │ Runtime │ Worker          │
+├────┼──────────┼─────────┼─────────┼─────────────────┤
+│ 1  │ baseline │ running │ 5m 32s  │ host:gpu0       │
+│ 2  │ lora-r8  │ queued  │ -       │ -               │
+└────┴──────────┴─────────┴─────────┴─────────────────┘
+                       Workers
+┌──────────────┬────────┬─────┬───────────┐
+│ ID           │ Status │ Job │ Last Seen │
+├──────────────┼────────┼─────┼───────────┤
+│ host:gpu0    │ busy   │ 1   │ 2s ago    │
+│ host:gpu1    │ idle   │ -   │ 5s ago    │
+└──────────────┴────────┴─────┴───────────┘
+Last updated: 14:32:15 (Ctrl+C to exit)
+```
+
+**Examples:**
+
+```bash
+# Default 2-second refresh
+whirr watch
+
+# Faster refresh (0.5 seconds)
+whirr watch -i 0.5
+```
+
+**Notes:**
+- Press `Ctrl+C` to exit
+- Uses Rich library for terminal UI
 
 ---
 

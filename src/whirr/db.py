@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -286,6 +286,21 @@ def cancel_job(conn: sqlite3.Connection, job_id: int) -> str:
     return old_status
 
 
+def _deserialize_job(row: sqlite3.Row) -> dict:
+    """Deserialize a job row, converting JSON fields back to Python objects."""
+    job = dict(row)
+
+    # Deserialize JSON fields
+    if job.get("command_argv"):
+        job["command_argv"] = json.loads(job["command_argv"])
+    if job.get("config"):
+        job["config"] = json.loads(job["config"])
+    if job.get("tags"):
+        job["tags"] = json.loads(job["tags"])
+
+    return job
+
+
 def get_job(conn: sqlite3.Connection, job_id: int) -> Optional[dict]:
     """Get a job by ID."""
     row = conn.execute(
@@ -296,7 +311,7 @@ def get_job(conn: sqlite3.Connection, job_id: int) -> Optional[dict]:
     if row is None:
         return None
 
-    return dict(row)
+    return _deserialize_job(row)
 
 
 def get_active_jobs(conn: sqlite3.Connection) -> list[dict]:
@@ -324,6 +339,101 @@ def cancel_all_queued(conn: sqlite3.Connection) -> int:
         (now,),
     )
     return cursor.rowcount
+
+
+def get_orphaned_jobs(conn: sqlite3.Connection, timeout_seconds: int = 120) -> list[dict]:
+    """
+    Find running jobs with stale heartbeats (likely orphaned).
+
+    A job is considered orphaned if:
+    - Status is 'running'
+    - heartbeat_at is older than timeout_seconds ago
+    """
+    now = datetime.now(timezone.utc)
+    cutoff_dt = now - timedelta(seconds=timeout_seconds)
+    cutoff = cutoff_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    rows = conn.execute(
+        """
+        SELECT * FROM jobs
+        WHERE status = 'running'
+          AND heartbeat_at IS NOT NULL
+          AND heartbeat_at < ?
+        """,
+        (cutoff,),
+    ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def requeue_orphaned_jobs(conn: sqlite3.Connection, timeout_seconds: int = 120) -> list[dict]:
+    """
+    Find and requeue orphaned jobs.
+
+    Orphaned jobs are running jobs with stale heartbeats.
+    They are reset to 'queued' status with incremented attempt counter.
+
+    Returns list of requeued jobs.
+    """
+    orphaned = get_orphaned_jobs(conn, timeout_seconds)
+
+    for job in orphaned:
+        conn.execute(
+            """
+            UPDATE jobs
+            SET status = 'queued',
+                worker_id = NULL,
+                started_at = NULL,
+                heartbeat_at = NULL,
+                cancel_requested_at = NULL,
+                pid = NULL,
+                pgid = NULL,
+                attempt = attempt + 1
+            WHERE id = ?
+            """,
+            (job["id"],),
+        )
+
+    return orphaned
+
+
+def retry_job(conn: sqlite3.Connection, job_id: int) -> int:
+    """
+    Create a new job as a retry of an existing job.
+
+    The new job has:
+    - Same command, workdir, name, tags
+    - parent_job_id pointing to original
+    - attempt = original.attempt + 1
+
+    Returns the new job ID.
+    """
+    original = get_job(conn, job_id)
+    if original is None:
+        raise ValueError(f"Job {job_id} not found")
+
+    if original["status"] not in ("failed", "cancelled"):
+        raise ValueError(f"Can only retry failed or cancelled jobs, got {original['status']}")
+
+    now = utcnow()
+    cursor = conn.execute(
+        """
+        INSERT INTO jobs (name, command_argv, workdir, config, tags, parent_job_id, attempt, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            original["name"],
+            json.dumps(original["command_argv"]),
+            original["workdir"],
+            json.dumps(original["config"]) if original["config"] else None,
+            json.dumps(original["tags"]) if original["tags"] else None,
+            job_id,
+            original["attempt"] + 1,
+            now,
+        ),
+    )
+
+    return cursor.lastrowid
 
 
 # --- Run Operations ---

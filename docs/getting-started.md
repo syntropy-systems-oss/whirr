@@ -172,6 +172,62 @@ The same code works whether you:
 
 When run via the queue, whirr automatically links the run to the job.
 
+## Running Parameter Sweeps
+
+Create a sweep configuration file:
+
+```yaml
+# sweep.yaml
+program: python train.py
+name: lr-sweep
+method: grid
+parameters:
+  lr:
+    values: [0.01, 0.001, 0.0001]
+  batch_size:
+    values: [32, 64]
+```
+
+Preview and submit the sweep:
+
+```bash
+# Preview jobs without submitting
+whirr sweep sweep.yaml --dry-run
+
+# Submit all jobs
+whirr sweep sweep.yaml
+# Output: Submitted 6 jobs (3 lr values × 2 batch sizes)
+```
+
+This creates jobs like:
+```
+python train.py --lr 0.01 --batch_size 32
+python train.py --lr 0.01 --batch_size 64
+python train.py --lr 0.001 --batch_size 32
+...
+```
+
+## Live Monitoring
+
+Watch job and worker status in real-time:
+
+```bash
+whirr watch
+```
+
+This displays a live-updating dashboard showing all active jobs and workers. Press `Ctrl+C` to exit.
+
+## Retrying Failed Jobs
+
+If a job fails, retry it:
+
+```bash
+whirr retry 5
+# Output: Created retry job #8 (attempt 2 of job #5)
+```
+
+The retry creates a new job with the same command, linking back to the original.
+
 ## Cancelling Jobs
 
 Cancel a queued job:
@@ -223,11 +279,13 @@ my-ml-project/
 │       │   ├── meta.json
 │       │   ├── config.json
 │       │   ├── metrics.jsonl
+│       │   ├── system.jsonl   # CPU/GPU metrics
 │       │   └── output.log
 │       └── local-20240115-103045-a1b2/
 │           ├── meta.json
 │           ├── config.json
-│           └── metrics.jsonl
+│           ├── metrics.jsonl
+│           └── system.jsonl
 ```
 
 - `job-*` directories are from queued runs

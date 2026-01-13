@@ -232,6 +232,37 @@ Worker                          Database
 4. Worker kills the process group
 5. Job marked as cancelled
 
+### Orphan Detection & Recovery
+
+When a worker crashes without finishing a job, the heartbeat stops:
+
+```
+Timeline:
+┌─────────────────────────────────────────────────────────────┐
+│  0s      30s      60s      90s      120s     150s          │
+│  │        │        │        │        │        │            │
+│  ▼        ▼        ▼        ▼        ▼        ▼            │
+│  💚       💚       💀       ❌       ❌       🔄           │
+│  start  heartbeat crash   stale   orphaned  requeued      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Detection:** Jobs with `status='running'` and `heartbeat_at` older than 2 minutes are considered orphaned.
+
+**Recovery:** When a worker starts, it automatically:
+1. Scans for orphaned jobs
+2. Requeues them (sets `status='queued'`, clears `worker_id`)
+3. Increments `attempt` counter to track retries
+
+```python
+# Worker startup
+orphaned = requeue_orphaned_jobs(conn, timeout_seconds=120)
+for job in orphaned:
+    console.print(f"Requeued orphaned job #{job['id']}")
+```
+
+This ensures jobs stuck by worker crashes get automatically retried.
+
 ## File Storage
 
 ### Directory Structure
@@ -244,7 +275,8 @@ Worker                          Database
     └── {run_id}/
         ├── meta.json     # Run metadata
         ├── config.json   # Hyperparameters
-        ├── metrics.jsonl # Time series metrics
+        ├── metrics.jsonl # Time series metrics (user logged)
+        ├── system.jsonl  # System metrics (CPU, GPU, memory)
         ├── output.log    # stdout/stderr
         └── artifacts/    # Saved files
 ```

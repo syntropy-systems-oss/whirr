@@ -34,6 +34,8 @@ class Run:
         run_id: Optional[str] = None,
         run_dir: Optional[Path] = None,
         job_id: Optional[int] = None,
+        system_metrics: bool = True,
+        system_metrics_interval: float = 10.0,
     ):
         """
         Initialize a run.
@@ -43,6 +45,7 @@ class Run:
         self._finished = False
         self._metric_idx = 0
         self._summary_data: Optional[dict] = None
+        self._system_metrics_collector = None
 
         # Detect worker context
         env_job_id = os.environ.get("WHIRR_JOB_ID")
@@ -105,6 +108,18 @@ class Run:
                 )
             finally:
                 conn.close()
+
+        # Start system metrics collection if enabled
+        if system_metrics:
+            try:
+                from whirr.system_metrics import SystemMetricsCollector
+                self._system_metrics_collector = SystemMetricsCollector(
+                    self.run_dir,
+                    interval=system_metrics_interval,
+                )
+                self._system_metrics_collector.start()
+            except Exception:
+                pass  # Don't fail if system metrics unavailable
 
     def _write_meta(self) -> None:
         """Write/update metadata file."""
@@ -211,6 +226,10 @@ class Run:
         if self._finished:
             return
 
+        # Stop system metrics collection
+        if self._system_metrics_collector:
+            self._system_metrics_collector.stop()
+
         self._finished = True
         self._finished_at = utcnow()
         self._status = status
@@ -250,6 +269,7 @@ def init(
     name: Optional[str] = None,
     config: Optional[dict[str, Any]] = None,
     tags: Optional[list[str]] = None,
+    system_metrics: bool = True,
 ) -> Run:
     """
     Initialize a new whirr run.
@@ -261,6 +281,7 @@ def init(
         name: Human-readable name for the run
         config: Configuration dictionary (hyperparameters, etc.)
         tags: List of tags for filtering
+        system_metrics: Enable automatic system metrics collection (GPU, CPU)
 
     Returns:
         A Run instance for logging metrics
@@ -277,7 +298,7 @@ def init(
     """
     global _active_run
 
-    run = Run(name=name, config=config, tags=tags)
+    run = Run(name=name, config=config, tags=tags, system_metrics=system_metrics)
     _active_run = run
 
     # Register atexit handler for auto-finish

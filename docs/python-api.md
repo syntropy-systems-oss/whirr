@@ -29,7 +29,8 @@ Initialize a new run for tracking.
 whirr.init(
     name: str = None,
     config: dict = None,
-    tags: list[str] = None
+    tags: list[str] = None,
+    system_metrics: bool = True
 ) -> Run
 ```
 
@@ -40,6 +41,7 @@ whirr.init(
 | `name` | `str` | Human-readable name for the run |
 | `config` | `dict` | Configuration/hyperparameters to record |
 | `tags` | `list[str]` | Tags for organizing runs |
+| `system_metrics` | `bool` | Enable automatic system metrics collection (default: True) |
 
 **Returns:** A `Run` instance
 
@@ -339,6 +341,29 @@ Separate file for configuration (keeps meta.json small):
   "epochs": 100
 }
 ```
+
+### `system.jsonl`
+
+Automatic system metrics collected during the run (if `system_metrics=True`):
+
+```jsonl
+{"_timestamp": "2024-01-15T10:30:00Z", "cpu_percent": 45.2, "memory_percent": 62.1}
+{"_timestamp": "2024-01-15T10:30:10Z", "cpu_percent": 78.5, "memory_percent": 63.0, "gpu_0_utilization": 95, "gpu_0_memory_used": 8192}
+```
+
+Fields (when available):
+- `cpu_percent`: CPU utilization percentage
+- `memory_percent`: System memory usage percentage
+- `gpu_N_utilization`: GPU N utilization (requires nvidia-smi)
+- `gpu_N_memory_used`: GPU N memory used in MB
+- `gpu_N_memory_total`: GPU N total memory in MB
+- `gpu_N_temperature`: GPU N temperature in Celsius
+
+**Notes:**
+- Collected every 10 seconds by default
+- GPU metrics only available on systems with NVIDIA GPUs and nvidia-smi
+- CPU/memory metrics require the `psutil` package (`pip install whirr[metrics]`)
+- Disable with `whirr.init(system_metrics=False)`
 
 ---
 
