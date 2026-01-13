@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -9,8 +10,15 @@ from unittest.mock import patch
 import pytest
 
 from whirr.cli.main import app
+
+
 from whirr.db import create_run, get_connection, init_db
 from whirr.run import Run, _capture_git_info, _capture_pip_freeze
+
+
+def strip_ansi(text: str) -> str:
+    """Strip ANSI escape codes from text."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
 
 
 @pytest.fixture
@@ -260,8 +268,9 @@ class TestDashboardCommand:
         runner = CliRunner()
         result = runner.invoke(app, ["dashboard", "--help"])
         assert result.exit_code == 0
-        assert "whirr dashboard" in result.stdout
-        assert "--port" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "whirr dashboard" in output
+        assert "--port" in output
 
     def test_dashboard_module_imports(self):
         """Test dashboard module can be imported."""

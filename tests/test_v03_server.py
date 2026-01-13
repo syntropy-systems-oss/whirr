@@ -1,9 +1,16 @@
-"""Tests for v0.4 server mode features."""
+"""Tests for v0.3 server mode features."""
 
+import re
 import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+
+def strip_ansi(text: str) -> str:
+    """Strip ANSI escape codes from text."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
 
 from whirr.db import (
     Database,
@@ -362,8 +369,9 @@ class TestWorkerRemoteMode:
         runner = CliRunner()
         result = runner.invoke(app, ["worker", "--help"])
         assert result.exit_code == 0
-        assert "--server" in result.output
-        assert "--data-dir" in result.output
+        output = strip_ansi(result.output)
+        assert "--server" in output
+        assert "--data-dir" in output
 
 
 class TestSubmitRemoteMode:
@@ -377,7 +385,8 @@ class TestSubmitRemoteMode:
         runner = CliRunner()
         result = runner.invoke(app, ["submit", "--help"])
         assert result.exit_code == 0
-        assert "--server" in result.output
+        output = strip_ansi(result.output)
+        assert "--server" in output
 
 
 class TestModels:

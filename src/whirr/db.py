@@ -363,7 +363,12 @@ class SQLiteDatabase(Database):
 
     def __init__(self, db_path: Path):
         self.db_path = db_path
-        self.conn = sqlite3.connect(str(db_path), timeout=5.0, isolation_level=None)
+        self.conn = sqlite3.connect(
+            str(db_path),
+            timeout=5.0,
+            isolation_level=None,
+            check_same_thread=False,  # Allow use across threads (for FastAPI)
+        )
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.row_factory = sqlite3.Row

@@ -309,13 +309,13 @@ The SQLite database is an **index**, not the source of truth. The filesystem is:
 - No authentication
 - File permissions are the security boundary
 
-### Server Mode (v0.4+)
+### Server Mode (v0.3+)
 
 - HTTP API for multi-machine orchestration
 - PostgreSQL for scalable job coordination
 - Lease-based job claims with heartbeat renewal
 
-## Server Mode Architecture (v0.4)
+## Server Mode Architecture (v0.3)
 
 For multi-machine setups, whirr supports a server mode where a central server coordinates jobs across distributed workers.
 
@@ -462,7 +462,7 @@ services:
 | New metric type | Extend `Run.log()` in `run.py` |
 | System metrics | Add `system_metrics.py` (v0.2) |
 | Dashboard | `src/whirr/cli/dashboard.py` (v0.3) |
-| Server API | `src/whirr/server/` (v0.4) |
+| Server API | `src/whirr/server/` (v0.3) |
 
 ### Database Migrations
 
@@ -470,7 +470,7 @@ Currently no migration system. For schema changes:
 
 1. Add new columns with defaults
 2. Handle missing columns gracefully in code
-3. Full migrations planned for v0.4
+3. Full migrations planned for future version
 
 ## Testing Strategy
 
