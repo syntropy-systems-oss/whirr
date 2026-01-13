@@ -162,6 +162,15 @@ your-project/
 | `whirr runs` | List all runs |
 | `whirr doctor` | Diagnose configuration issues |
 
+## Documentation
+
+Full documentation is available in the [`docs/`](docs/) directory:
+
+- [Getting Started](docs/getting-started.md) - Installation and first steps
+- [CLI Reference](docs/cli-reference.md) - All commands and options
+- [Python API](docs/python-api.md) - Library reference and examples
+- [Architecture](docs/architecture.md) - How whirr works under the hood
+
 ## Development
 
 ```bash
