@@ -6,7 +6,7 @@ Thank you for your interest in contributing to whirr!
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Tang-Tensor-Trends/whirr.git
+   git clone https://github.com/SynotropySystems/whirr.git
    cd whirr
    ```
 

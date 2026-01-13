@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [
-    { name = "Tang Tensor Trends" }
+    { name = "Syntropy Systems" }
 ]
 keywords = ["ml", "experiment", "tracking", "orchestration", "wandb", "mlflow"]
 classifiers = [
@@ -41,9 +41,9 @@ dev = [
 whirr = "whirr.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/Tang-Tensor-Trends/whirr"
-Repository = "https://github.com/Tang-Tensor-Trends/whirr"
-Issues = "https://github.com/Tang-Tensor-Trends/whirr/issues"
+Homepage = "https://github.com/SynotropySystems/whirr"
+Repository = "https://github.com/SynotropySystems/whirr"
+Issues = "https://github.com/SynotropySystems/whirr/issues"
 
 [tool.hatch.version]
 path = "src/whirr/__init__.py"

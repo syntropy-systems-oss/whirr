@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://github.com/Tang-Tensor-Trends/whirr/actions/workflows/tests.yml/badge.svg)](https://github.com/Tang-Tensor-Trends/whirr/actions/workflows/tests.yml)
+[![Tests](https://github.com/SynotropySystems/whirr/actions/workflows/tests.yml/badge.svg)](https://github.com/SynotropySystems/whirr/actions/workflows/tests.yml)
 
 Local experiment orchestration. Queue jobs, track metrics, wake up to results.
 
@@ -25,7 +25,7 @@ pip install whirr
 Or install from source:
 
 ```bash
-git clone https://github.com/Tang-Tensor-Trends/whirr.git
+git clone https://github.com/SynotropySystems/whirr.git
 cd whirr
 pip install -e .
 ```
