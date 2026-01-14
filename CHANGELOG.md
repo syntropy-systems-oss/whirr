@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.1](https://github.com/syntropy-systems-oss/whirr/compare/v0.4.0...v0.4.1) (2026-01-14)
+
+
+### Bug Fixes
+
+* shared storage bind mount and documentation improvements ([5453c2e](https://github.com/syntropy-systems-oss/whirr/commit/5453c2ec96cc21192a48c21cf61142ef6ac64d1d))
+* use toml type for Cargo.toml in release-please config ([904ea25](https://github.com/syntropy-systems-oss/whirr/commit/904ea25101223a145695f3d4c5514e56d7c5e9dc))
+
+
+### Documentation
+
+* add server setup guide and update README ([77017c9](https://github.com/syntropy-systems-oss/whirr/commit/77017c95b68d4e2ca133806796b4fa1796f6ec44))
+
 ## [0.4.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.3.0...v0.4.0) (2026-01-14)
 
 
