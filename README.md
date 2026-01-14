@@ -165,6 +165,23 @@ whirr server --database-url postgresql://user:pass@localhost:5432/whirr
 
 ### Start Workers on GPU Machines
 
+**Option 1: Rust Worker (Recommended for production)**
+
+The Rust worker is a lightweight ~2MB binary with minimal memory footprint (~10MB RAM):
+
+```bash
+# Build the Rust worker
+cd worker-rust && cargo build --release
+
+# Copy to GPU nodes
+scp target/release/whirr-worker gpu-node:/usr/local/bin/
+
+# Run on GPU node
+whirr-worker --server http://head-node:8080 --data-dir /mnt/shared/whirr --gpu 0
+```
+
+**Option 2: Python Worker**
+
 ```bash
 # On each GPU machine, connect to the server
 whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr

@@ -362,6 +362,9 @@ For multi-machine setups, whirr supports a server mode where a central server co
 - Bare-bones processes that poll for jobs
 - Connect via HTTP API (no direct database access)
 - Write output to shared filesystem
+- Two implementations:
+  - **Rust worker** (`whirr-worker`): ~2MB binary, ~10MB RAM - recommended for production
+  - **Python worker** (`whirr worker`): Uses existing Python installation
 
 **Shared Filesystem:**
 - NFS or other shared mount accessible to all nodes
@@ -422,6 +425,31 @@ class PostgresDatabase(Database): ... # Server mode
 | `/api/v1/jobs` | POST | Submit a new job |
 | `/api/v1/status` | GET | Get queue status |
 | `/health` | GET | Health check |
+
+### Rust Worker
+
+For memory-constrained GPU machines, the Rust worker provides minimal overhead:
+
+```
+worker-rust/
+├── Cargo.toml      # Dependencies (clap, ureq, serde)
+├── src/
+│   ├── main.rs     # CLI and main loop
+│   ├── client.rs   # HTTP client for server API
+│   └── runner.rs   # Process management with SIGTERM/SIGKILL
+```
+
+**Key design choices:**
+- `ureq` for HTTP (blocking, no async runtime overhead)
+- `nix` for Unix process groups (clean job termination)
+- No garbage collector (deterministic memory usage)
+
+**Memory comparison:**
+
+| Worker | Binary Size | Runtime Memory |
+|--------|-------------|----------------|
+| Rust   | ~2 MB       | ~10 MB         |
+| Python | N/A         | ~150 MB        |
 
 ### Docker Compose Deployment
 
