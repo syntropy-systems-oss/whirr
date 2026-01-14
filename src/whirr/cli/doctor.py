@@ -3,9 +3,7 @@
 import os
 import shutil
 import subprocess
-from pathlib import Path
 
-import typer
 from rich.console import Console
 
 from whirr.config import find_whirr_dir, get_db_path

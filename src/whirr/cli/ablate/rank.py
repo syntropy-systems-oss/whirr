@@ -163,7 +163,7 @@ def rank(
 
     # Calculate statistics
     if "baseline" not in metrics_by_condition or not metrics_by_condition["baseline"]:
-        console.print(f"[red]Error:[/red] No baseline results found")
+        console.print("[red]Error:[/red] No baseline results found")
         if pending_count > 0:
             console.print(f"  {pending_count} jobs still pending")
         raise typer.Exit(1)
@@ -195,7 +195,7 @@ def rank(
         )
 
     if not delta_effects:
-        console.print(f"[yellow]No delta results found yet.[/yellow]")
+        console.print("[yellow]No delta results found yet.[/yellow]")
         if pending_count > 0:
             console.print(f"  {pending_count} jobs still pending")
         raise typer.Exit(1)

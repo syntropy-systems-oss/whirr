@@ -49,6 +49,7 @@ def cancel(
             else:
                 console.print("[dim]No queued jobs to cancel[/dim]")
         else:
+            assert job_id is not None  # guaranteed by check at line 31
             job = get_job(conn, job_id)
             if job is None:
                 console.print(f"[red]Error:[/red] Job #{job_id} not found")

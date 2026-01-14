@@ -76,3 +76,23 @@ packages = ["src/whirr"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.basedpyright]
+include = ["src"]
+pythonVersion = "3.9"
+typeCheckingMode = "standard"
+# Disable deprecated warnings since we need Python 3.9 compatibility
+reportDeprecated = false
+# Allow Any for flexibility in JSON handling
+reportExplicitAny = false
+reportAny = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+# Typer uses function calls in defaults
+reportCallInDefaultInitializer = false
+# Private usage is intentional in some cases
+reportPrivateUsage = false
+# Unused call results are common with decorators
+reportUnusedCallResult = false

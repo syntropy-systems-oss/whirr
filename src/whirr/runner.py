@@ -130,9 +130,11 @@ class JobRunner:
 
         # Already finished?
         if self._process.poll() is not None:
-            self._exit_code = self._process.returncode
+            # returncode is set after poll() returns non-None
+            exit_code = self._process.returncode or 0
+            self._exit_code = exit_code
             self._cleanup()
-            return self._exit_code
+            return exit_code
 
         # Get the process group ID (same as session ID with start_new_session)
         try:
@@ -152,9 +154,10 @@ class JobRunner:
         deadline = time.time() + grace_period
         while time.time() < deadline:
             if self._process.poll() is not None:
-                self._exit_code = self._process.returncode
+                exit_code = self._process.returncode or 0
+                self._exit_code = exit_code
                 self._cleanup()
-                return self._exit_code
+                return exit_code
             time.sleep(0.1)
 
         # Still alive - SIGKILL
@@ -169,9 +172,10 @@ class JobRunner:
         except subprocess.TimeoutExpired:
             pass
 
-        self._exit_code = self._process.returncode or -signal.SIGKILL
+        exit_code = self._process.returncode or -signal.SIGKILL
+        self._exit_code = exit_code
         self._cleanup()
-        return self._exit_code
+        return exit_code
 
     def _cleanup(self) -> None:
         """Cleanup resources."""

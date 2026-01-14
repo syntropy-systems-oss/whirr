@@ -1,9 +1,7 @@
 """Tests for whirr CLI commands."""
 
 import os
-from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from whirr.cli.main import app

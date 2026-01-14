@@ -3,16 +3,13 @@
 import json
 import os
 import re
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from whirr.cli.main import app
 
 
-from whirr.db import create_run, get_connection, init_db
+from whirr.db import init_db
 from whirr.run import Run, _capture_git_info, _capture_pip_freeze
 
 

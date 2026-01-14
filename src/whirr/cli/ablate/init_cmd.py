@@ -44,7 +44,7 @@ def init(
     console.print(f"  [dim]session_id:[/dim] {session.session_id}")
     console.print(f"  [dim]metric:[/dim] {metric}")
     console.print(f"  [dim]seed_base:[/dim] {session.seed_base}")
-    console.print(f"\nNext steps:")
+    console.print("\nNext steps:")
     console.print(f"  1. Add deltas: [cyan]whirr ablate add {name} temperature=0[/cyan]")
     console.print(
         f"  2. Run study:  [cyan]whirr ablate run {name} -- python eval.py --seed {{{{seed}}}} --cfg {{{{cfg_path}}}}[/cyan]"

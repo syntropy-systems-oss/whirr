@@ -1,24 +1,20 @@
 """Tests for v0.3 server mode features."""
 
+import importlib.util
 import re
 import pytest
-import tempfile
-from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+from whirr.db import (
+    SQLiteDatabase,
+    get_database,
+    SQLITE_SCHEMA,
+)
 
 
 def strip_ansi(text: str) -> str:
     """Strip ANSI escape codes from text."""
     return re.sub(r'\x1b\[[0-9;]*m', '', text)
-
-
-from whirr.db import (
-    Database,
-    SQLiteDatabase,
-    get_database,
-    SQLITE_SCHEMA,
-    POSTGRES_SCHEMA,
-)
 
 
 class TestDatabaseAbstraction:
@@ -174,13 +170,22 @@ class TestClientModule:
 
     def test_client_requires_httpx(self):
         """Test client raises helpful error without httpx."""
-        with patch.dict("sys.modules", {"httpx": None}):
-            # Re-import to trigger ImportError
-            import importlib
-            import whirr.client
+        import importlib
+        import whirr.client
+
+        # Save original httpx reference
+        original_httpx = whirr.client.httpx
+
+        try:
+            with patch.dict("sys.modules", {"httpx": None}):
+                # Re-import to trigger ImportError
+                importlib.reload(whirr.client)
+                with pytest.raises(ImportError, match="httpx is required"):
+                    whirr.client.WhirrClient("http://localhost:8080")
+        finally:
+            # Restore httpx and reload module to fix state for other tests
+            whirr.client.httpx = original_httpx
             importlib.reload(whirr.client)
-            with pytest.raises(ImportError, match="httpx is required"):
-                whirr.client.WhirrClient("http://localhost:8080")
 
     def test_client_wait_for_job_timeout(self):
         """Test wait_for_job raises TimeoutError."""
@@ -282,13 +287,6 @@ class TestServerModule:
         from whirr.server import create_app
         from whirr.server.models import (
             JobClaim,
-            JobComplete,
-            JobCreate,
-            JobResponse,
-            RunResponse,
-            StatusResponse,
-            WorkerRegistration,
-            WorkerResponse,
         )
         assert create_app is not None
         assert JobClaim is not None
@@ -321,11 +319,7 @@ class TestServerModule:
 
 
 # Check if httpx is available for TestClient
-try:
-    import httpx
-    HAS_HTTPX = True
-except ImportError:
-    HAS_HTTPX = False
+HAS_HTTPX = importlib.util.find_spec("httpx") is not None
 
 
 @pytest.mark.skipif(not HAS_HTTPX, reason="httpx not installed")
@@ -583,7 +577,9 @@ class TestServerAPI:
             name="Test Run",
         )
 
-        response = client.get("/api/v1/runs/test-traversal/artifacts/../../../etc/passwd")
+        # Use percent-encoded dots (%2e) to bypass URL normalization
+        # that would otherwise collapse the path before reaching the server
+        response = client.get("/api/v1/runs/test-traversal/artifacts/%2e%2e/%2e%2e/%2e%2e/etc/passwd")
         assert response.status_code == 403
 
 
@@ -696,5 +692,5 @@ class TestBackwardCompatibility:
 
     def test_schema_alias(self):
         """Test SCHEMA alias for backward compatibility."""
-        from whirr.db import SCHEMA, SQLITE_SCHEMA
+        from whirr.db import SCHEMA
         assert SCHEMA == SQLITE_SCHEMA

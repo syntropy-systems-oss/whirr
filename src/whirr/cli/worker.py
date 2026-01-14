@@ -192,13 +192,14 @@ def _local_worker_loop(worker_id: str, db_path: Path, runs_dir: Path, config) ->
         # Heartbeat thread
         heartbeat_stop = Event()
         cancel_requested = Event()
+        job_id = job["id"]  # capture for closure
 
         def heartbeat_loop():
             while not heartbeat_stop.is_set():
                 try:
                     conn = get_connection(db_path)
                     try:
-                        cancel_time = update_job_heartbeat(conn, job["id"])
+                        cancel_time = update_job_heartbeat(conn, job_id)
                         if cancel_time:
                             cancel_requested.set()
                     finally:

@@ -417,6 +417,7 @@ class SQLiteDatabase(Database):
                 1 if parent_job_id is None else None,
             ),
         )
+        assert cursor.lastrowid is not None  # INSERT always sets lastrowid
         return cursor.lastrowid
 
     def claim_job(self, worker_id: str, lease_seconds: int = 60) -> Optional[dict]:
@@ -1233,6 +1234,7 @@ def create_job(
             1 if parent_job_id is None else None,
         ),
     )
+    assert cursor.lastrowid is not None  # INSERT always sets lastrowid
     return cursor.lastrowid
 
 
@@ -1440,6 +1442,7 @@ def retry_job(conn: sqlite3.Connection, job_id: int) -> int:
             now,
         ),
     )
+    assert cursor.lastrowid is not None  # INSERT always sets lastrowid
     return cursor.lastrowid
 
 

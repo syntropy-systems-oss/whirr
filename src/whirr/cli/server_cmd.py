@@ -70,7 +70,7 @@ def server(
     if data_dir:
         os.environ["WHIRR_DATA_DIR"] = str(data_dir)
 
-    console.print(f"[bold]whirr server[/bold]")
+    console.print("[bold]whirr server[/bold]")
     console.print(f"  Host: {host}")
     console.print(f"  Port: {port}")
 

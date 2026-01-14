@@ -1,9 +1,7 @@
 """Tests for v0.2 features."""
 
 import json
-import os
 import time
-from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -53,7 +51,7 @@ class TestOrphanDetection:
     def test_get_orphaned_jobs_ignores_recent(self, db_connection):
         """Test that jobs with recent heartbeats are not orphaned."""
         # Create and claim a job
-        job_id = create_job(
+        create_job(
             db_connection,
             command_argv=["echo", "test"],
             workdir="/tmp",
@@ -322,7 +320,7 @@ class TestWatchCommand:
     def test_watch_exits_on_interrupt(self, whirr_project):
         """Test that watch command structure is correct."""
         # Just import and verify the command exists
-        from whirr.cli.watch import watch, build_jobs_table, build_workers_table
+        from whirr.cli.watch import build_jobs_table, build_workers_table
 
         # Test table building with empty data
         jobs_table = build_jobs_table([])

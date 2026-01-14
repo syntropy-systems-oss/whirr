@@ -7,7 +7,6 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import whirr
@@ -15,7 +14,6 @@ from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import (
     get_active_jobs,
     get_connection,
-    get_job,
     get_runs,
     get_workers,
     cancel_job,

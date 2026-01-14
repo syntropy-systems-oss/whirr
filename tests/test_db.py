@@ -1,6 +1,5 @@
 """Tests for whirr database operations."""
 
-import pytest
 
 from whirr.db import (
     cancel_job,

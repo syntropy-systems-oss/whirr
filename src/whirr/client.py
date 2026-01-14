@@ -2,7 +2,7 @@
 
 import socket
 import time
-from typing import Optional
+from typing import Optional, Union
 
 try:
     import httpx
@@ -65,14 +65,14 @@ class WhirrClient:
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError as e:  # pyright: ignore[reportOptionalMemberAccess] - guarded by __init__
             # Try to get error detail from response
             try:
                 detail = e.response.json().get("detail", str(e))
             except Exception:
                 detail = str(e)
             raise WhirrClientError(f"Server error: {detail}") from e
-        except httpx.RequestError as e:
+        except httpx.RequestError as e:  # pyright: ignore[reportOptionalMemberAccess] - guarded by __init__
             raise WhirrClientError(f"Connection error: {e}") from e
 
     # --- Worker Operations ---
@@ -347,7 +347,7 @@ class WhirrClient:
         Returns:
             List of run dicts
         """
-        params = {"limit": limit}
+        params: dict[str, Union[int, str]] = {"limit": limit}
         if status:
             params["status"] = status
         if tag:
@@ -416,13 +416,13 @@ class WhirrClient:
             response = self._client.get(url)
             response.raise_for_status()
             return response.content
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError as e:  # pyright: ignore[reportOptionalMemberAccess] - guarded by __init__
             try:
                 detail = e.response.json().get("detail", str(e))
             except Exception:
                 detail = str(e)
             raise WhirrClientError(f"Error fetching artifact: {detail}") from e
-        except httpx.RequestError as e:
+        except httpx.RequestError as e:  # pyright: ignore[reportOptionalMemberAccess] - guarded by __init__
             raise WhirrClientError(f"Connection error: {e}") from e
 
     # --- Convenience Methods ---

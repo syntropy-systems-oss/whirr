@@ -8,7 +8,7 @@ from rich.table import Table
 
 from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import get_connection, get_runs
-from whirr.run import read_meta, read_metrics
+from whirr.run import read_meta
 
 console = Console()
 

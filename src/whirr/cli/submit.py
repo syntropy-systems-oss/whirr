@@ -142,7 +142,7 @@ def _print_success(
 
     console.print(f"[green]Submitted job #{job_id}[/green]")
     if remote:
-        console.print(f"  [dim]mode:[/dim] remote")
+        console.print("  [dim]mode:[/dim] remote")
     if name:
         console.print(f"  [dim]name:[/dim] {name}")
     console.print(f"  [dim]command:[/dim] {command_display}")

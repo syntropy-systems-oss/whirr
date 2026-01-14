@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 
 from whirr.ablate import FileValue, load_session_by_name
-from whirr.config import find_whirr_dir, require_whirr_dir
+from whirr.config import require_whirr_dir
 
 console = Console()
 
@@ -106,16 +106,15 @@ def add(
             raise typer.Exit(1)
 
     # Determine delta name
-    if delta_name is None:
-        delta_name = list(changes.keys())[0]
+    resolved_name: str = delta_name if delta_name is not None else list(changes.keys())[0]
 
-    if delta_name in session.deltas:
-        console.print(f"[yellow]Warning:[/yellow] Overwriting existing delta '{delta_name}'")
+    if resolved_name in session.deltas:
+        console.print(f"[yellow]Warning:[/yellow] Overwriting existing delta '{resolved_name}'")
 
-    session.deltas[delta_name] = changes
+    session.deltas[resolved_name] = changes
     session.save()
 
-    console.print(f"[green]Added delta:[/green] {delta_name}")
+    console.print(f"[green]Added delta:[/green] {resolved_name}")
     for k, v in changes.items():
         if isinstance(v, FileValue):
             console.print(f"  [dim]{k}=[/dim]@{v.path}")

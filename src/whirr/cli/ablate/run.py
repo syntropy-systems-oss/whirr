@@ -266,7 +266,7 @@ def _submit_local(whirr_dir: Path, jobs_to_submit: List[Dict], workdir: str, ses
 
         console.print(f"\n[green]Submitted {len(submitted_ids)} jobs[/green]")
         console.print(f"  [dim]Job IDs:[/dim] {submitted_ids[0]}-{submitted_ids[-1]}")
-        console.print(f"\nMonitor: [cyan]whirr status[/cyan]")
+        console.print("\nMonitor: [cyan]whirr status[/cyan]")
         console.print(f"Rank:    [cyan]whirr ablate rank {session.name}[/cyan]")
 
     finally:
@@ -278,7 +278,7 @@ def _submit_remote(
 ) -> None:
     """Submit jobs to remote server."""
     try:
-        from whirr.client import WhirrClient, WhirrClientError
+        from whirr.client import WhirrClient
     except ImportError:
         console.print(
             "[red]Error:[/red] httpx is required for remote submission. "

@@ -2,12 +2,11 @@
 
 import json
 import subprocess
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Thread
-from typing import Optional
+from typing import Optional, Union
 
 
 @dataclass
@@ -23,9 +22,9 @@ class SystemMetrics:
     gpu_memory_total_gb: Optional[float] = None
     gpu_name: Optional[str] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Union[str, float]]:
         """Convert to dictionary, excluding None values."""
-        result = {"_timestamp": self.timestamp}
+        result: dict[str, Union[str, float]] = {"_timestamp": self.timestamp}
         if self.cpu_percent is not None:
             result["cpu_percent"] = self.cpu_percent
         if self.memory_used_gb is not None:

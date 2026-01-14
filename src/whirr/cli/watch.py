@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -38,7 +39,7 @@ def format_duration(started_at: str) -> str:
         return "-"
 
 
-def format_time_ago(timestamp: str) -> str:
+def format_time_ago(timestamp: Optional[str]) -> str:
     """Format a timestamp as time ago."""
     if not timestamp:
         return "-"

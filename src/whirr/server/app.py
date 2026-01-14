@@ -11,11 +11,10 @@ from time import sleep
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
-from ..db import Database, PostgresDatabase, SQLiteDatabase, get_database
+from ..db import Database, PostgresDatabase, SQLiteDatabase
 from .models import (
-    ErrorResponse,
     HeartbeatResponse,
     JobClaim,
     JobClaimResponse,
@@ -28,7 +27,6 @@ from .models import (
     RunResponse,
     StatusResponse,
     WorkerRegistration,
-    WorkerResponse,
     WorkerUnregister,
 )
 

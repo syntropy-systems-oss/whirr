@@ -1,7 +1,6 @@
 """Tests for whirr Run class."""
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -104,7 +103,6 @@ class TestRun:
 
     def test_run_with_config_and_tags(self, whirr_project):
         """Test run with configuration and tags."""
-        import json
 
         run = Run(
             name="test-run",

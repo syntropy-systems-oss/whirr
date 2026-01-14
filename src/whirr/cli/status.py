@@ -1,6 +1,7 @@
 """whirr status command."""
 
 import json
+import shlex
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -141,8 +142,6 @@ def _show_job_table(jobs: list[dict]) -> None:
 
 def _show_job_details(job: dict) -> None:
     """Display detailed job information."""
-    import shlex
-
     status_style = {
         "queued": "yellow",
         "running": "blue",
@@ -154,7 +153,6 @@ def _show_job_details(job: dict) -> None:
     # Parse command_argv from JSON if needed
     command_argv = job.get("command_argv")
     if isinstance(command_argv, str):
-        import json
         command_argv = json.loads(command_argv)
     command_display = shlex.join(command_argv) if command_argv else "-"
 

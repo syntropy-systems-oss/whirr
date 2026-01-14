@@ -1,20 +1,14 @@
 """Tests for ablation study functionality."""
 
 import json
-import os
-from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from whirr.ablate import (
     AblationSession,
     FileValue,
-    create_session,
     generate_session_id,
-    load_index,
     load_session_by_name,
-    session_exists,
 )
 from whirr.ablate.models import AblationRunResult
 from whirr.cli.main import app

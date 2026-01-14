@@ -2,9 +2,7 @@
 
 import threading
 import time
-from pathlib import Path
 
-import pytest
 
 from whirr.db import (
     claim_job,
@@ -12,7 +10,6 @@ from whirr.db import (
     create_job,
     get_connection,
     get_job,
-    init_db,
 )
 
 
@@ -105,7 +102,7 @@ class TestConcurrentClaims:
                 try:
                     conn = get_connection(db_path)
                     # Create job
-                    job_id = create_job(
+                    create_job(
                         conn,
                         command_argv=["echo", f"{thread_id}-{i}"],
                         workdir="/tmp",

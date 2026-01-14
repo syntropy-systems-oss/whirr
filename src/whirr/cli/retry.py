@@ -37,7 +37,7 @@ def retry(
             raise typer.Exit(1)
 
         if original["status"] not in ("failed", "cancelled"):
-            console.print(f"[red]Error:[/red] Can only retry failed or cancelled jobs")
+            console.print("[red]Error:[/red] Can only retry failed or cancelled jobs")
             console.print(f"  Job #{job_id} has status: {original['status']}")
             raise typer.Exit(1)
 

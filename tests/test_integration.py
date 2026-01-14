@@ -1,21 +1,14 @@
 """Integration tests for whirr - end-to-end workflows."""
 
-import os
-import signal
 import sys
 import time
 from pathlib import Path
-from threading import Thread, Event
 
-import pytest
 
 from whirr.db import (
     get_connection,
     create_job,
-    get_job,
     claim_job,
-    complete_job,
-    cancel_job,
 )
 from whirr.runner import JobRunner
 from whirr.run import Run, read_metrics
@@ -228,7 +221,7 @@ time.sleep(60)
         assert marker_file.exists(), "Child process should have started writing"
 
         # Record current file size
-        initial_size = marker_file.stat().st_size
+        marker_file.stat().st_size
 
         # Kill the job
         runner.kill(grace_period=1.0)
