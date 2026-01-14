@@ -667,6 +667,217 @@ docker compose up -d
 
 ---
 
+## Ablation Studies
+
+The `whirr ablate` command group provides tools for running ablation studies with paired seeds across conditions. Install with `pip install "whirr[ablate]"`.
+
+### `whirr ablate init`
+
+Initialize a new ablation study session.
+
+```bash
+whirr ablate init NAME --metric METRIC
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Name for the ablation session |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--metric TEXT` | `-m` | Metric to track (required) |
+
+**Example:**
+
+```bash
+whirr ablate init weird-behavior --metric win
+```
+
+**Creates:**
+- `.whirr/ablations/<session_id>.json` - Session file
+- `.whirr/ablations/index.json` - Name → session_id mapping
+
+---
+
+### `whirr ablate add`
+
+Add a delta (parameter change) to an ablation session.
+
+```bash
+whirr ablate add NAME DELTAS... [OPTIONS]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Session name |
+| `DELTAS` | One or more `key=value` pairs |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--name TEXT` | `-n` | Name for this delta (default: first key) |
+
+**Value Syntax:**
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Number | `temperature=0` | Integer or float |
+| String | `model=gpt-4` | Plain string |
+| File | `system=@prompts/v2.txt` | Load file contents |
+
+**Examples:**
+
+```bash
+# Single parameter
+whirr ablate add weird-behavior temperature=0
+
+# Multiple parameters with custom name
+whirr ablate add weird-behavior lr=0.001 batch_size=64 --name "high-lr"
+
+# File reference (contents are inlined)
+whirr ablate add weird-behavior system=@prompts/v2.txt
+```
+
+**Notes:**
+- File contents are read at `add` time and stored in the session
+- Whitespace in files is preserved (no stripping)
+- File paths are stored relative to project root
+
+---
+
+### `whirr ablate run`
+
+Run all conditions (baseline + deltas) with paired seeds.
+
+```bash
+whirr ablate run [OPTIONS] NAME -- COMMAND [ARGS]...
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Session name |
+| `COMMAND` | Command template to run |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--replicates INT` | `-r` | Number of replicates (default: 20) |
+| `--dry-run` | `-n` | Preview jobs without submitting |
+| `--server URL` | `-s` | Server URL for remote submission |
+
+**Template Variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `{{seed}}` | Replicate seed (deterministic from session seed_base) |
+| `{{cfg_path}}` | Path to generated config JSON |
+
+**Config File Format:**
+
+Each condition/replicate gets a JSON config file:
+
+```json
+{
+  "__ablate__": {
+    "session_id": "a7x9k2",
+    "condition": "temperature",
+    "replicate": 0,
+    "seed": 12345
+  },
+  "temperature": 0,
+  "system": "You are a helpful..."
+}
+```
+
+**Examples:**
+
+```bash
+# Preview what will be submitted
+whirr ablate run --dry-run -r 10 weird-behavior -- python eval.py --seed {{seed}} --cfg {{cfg_path}}
+
+# Submit all jobs
+whirr ablate run -r 20 weird-behavior -- python eval.py --seed {{seed}} --cfg {{cfg_path}}
+
+# Remote submission
+whirr ablate run --server http://head:8080 weird-behavior -- python eval.py --seed {{seed}} --cfg {{cfg_path}}
+```
+
+**Notes:**
+- Options must come before `NAME` due to `--` separator handling
+- Seeds are deterministic: `seed = seed_base + replicate_index`
+- Jobs are tagged with `ablate:<session_id>`, `condition:<name>`, `replicate:<i>`
+
+---
+
+### `whirr ablate rank`
+
+Rank deltas by their effect on the target metric.
+
+```bash
+whirr ablate rank NAME [OPTIONS]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `NAME` | Session name |
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--verbose` | `-v` | Show per-replicate values |
+
+**Ranking Algorithm:**
+
+1. Compute baseline mean from all baseline runs
+2. For each delta, compute: `effect = mean(delta) - mean(baseline)`
+3. Rank by `abs(effect)` descending (strongest effect first)
+
+**Metric Extraction:**
+
+1. First checks `run.summary[metric]`
+2. Falls back to last occurrence in `metrics.jsonl`
+3. Runs without the metric are marked `no_metric` and excluded
+
+**Example:**
+
+```bash
+whirr ablate rank weird-behavior
+```
+
+**Output:**
+
+```
+Ablation Results: weird-behavior
+  metric: win
+  baseline mean: 0.5234 (n=20)
+
+          Delta Ranking (strongest effect first)
+┏━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━┓
+┃ Rank ┃ Delta       ┃   Mean ┃   Effect ┃  N ┃
+┡━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━┩
+│ 1    │ temperature │ 0.3012 │ -0.2222  │ 20 │
+│ 2    │ system      │ 0.4891 │ -0.0343  │ 20 │
+└──────┴─────────────┴────────┴──────────┴────┘
+
+Strongest effect: temperature
+  Effect: -0.2222 (delta mean - baseline mean)
+```
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |

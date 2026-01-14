@@ -20,6 +20,7 @@ Welcome to the whirr documentation.
 | Add tracking to my script | [Python API](python-api.md#quick-example) |
 | Understand the CLI | [CLI Reference](cli-reference.md) |
 | Run multiple GPU workers | [CLI Reference - worker](cli-reference.md#whirr-worker) |
+| Run ablation studies | [CLI Reference - ablate](cli-reference.md#ablation-studies) |
 | Understand how it works | [Architecture](architecture.md) |
 | Contribute | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 

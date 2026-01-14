@@ -47,6 +47,7 @@ server = [
     "psycopg2-binary>=2.9.0",
     "httpx>=0.25.0",
 ]
+ablate = []
 dev = [
     "pytest>=7.0",
     "pytest-timeout>=2.0",

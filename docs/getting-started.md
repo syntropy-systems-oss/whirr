@@ -8,12 +8,30 @@ This guide walks you through setting up whirr and running your first experiment.
 pip install whirr
 ```
 
-Or install from source:
+### Optional Extras
+
+Install additional features as needed:
+
+```bash
+# Ablation studies
+pip install "whirr[ablate]"
+
+# Web dashboard
+pip install "whirr[dashboard]"
+
+# Multi-machine server mode
+pip install "whirr[server]"
+
+# All extras
+pip install "whirr[ablate,dashboard,server]"
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/syntropy-systems-oss/whirr.git
 cd whirr
-pip install -e .
+pip install -e ".[ablate,dashboard,server]"
 ```
 
 ## Quick Start

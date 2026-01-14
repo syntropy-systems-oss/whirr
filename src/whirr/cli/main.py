@@ -2,6 +2,7 @@
 
 import typer
 
+from whirr.cli.ablate import ablate_app
 from whirr.cli.cancel import cancel
 from whirr.cli.compare import compare
 from whirr.cli.dashboard import dashboard
@@ -44,6 +45,9 @@ app.command()(dashboard)
 app.command()(compare)
 app.command(name="export")(export)
 app.command()(server)
+
+# Register ablate sub-app
+app.add_typer(ablate_app, name="ablate")
 
 
 if __name__ == "__main__":
