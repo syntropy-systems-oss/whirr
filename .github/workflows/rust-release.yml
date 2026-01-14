@@ -1,0 +1,92 @@
+name: Build Rust Worker
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write  # Needed to attach assets to releases
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64 (most GPU servers)
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: whirr-worker-linux-x86_64
+
+          # Linux ARM64 (Graviton, Ampere)
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: whirr-worker-linux-aarch64
+            cross: true
+
+          # macOS x86_64 (Intel Macs)
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: whirr-worker-macos-x86_64
+
+          # macOS ARM64 (Apple Silicon)
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: whirr-worker-macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        working-directory: worker-rust
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          cp worker-rust/target/${{ matrix.target }}/release/whirr-worker ${{ matrix.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+
+  release:
+    name: Attach to Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -la artifacts/
+
+      - name: Attach binaries to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/whirr-worker-linux-x86_64/whirr-worker-linux-x86_64
+            artifacts/whirr-worker-linux-aarch64/whirr-worker-linux-aarch64
+            artifacts/whirr-worker-macos-x86_64/whirr-worker-macos-x86_64
+            artifacts/whirr-worker-macos-aarch64/whirr-worker-macos-aarch64
