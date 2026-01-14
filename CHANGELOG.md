@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.3.0...v0.4.0) (2026-01-14)
+
+
+### Features
+
+* add Rust worker for minimal memory footprint ([f58c331](https://github.com/syntropy-systems-oss/whirr/commit/f58c331572e2315167d3eac6477a19814c820fb6))
+
+
+### Bug Fixes
+
+* remove default password from docker-compose.yml ([99c750e](https://github.com/syntropy-systems-oss/whirr/commit/99c750e3bf5e6413e1524bb8e2c34978719af2ed))
+
 ## [0.3.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.2.0...v0.3.0) (2026-01-13)
 
 
