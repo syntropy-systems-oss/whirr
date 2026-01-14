@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.4.1...v0.5.0) (2026-01-14)
+
+
+### Features
+
+* add whirr ablate for ablation studies ([1fbc2ae](https://github.com/syntropy-systems-oss/whirr/commit/1fbc2aeeeb26792aee9a8d126de5fec412d0bf7d))
+
+
+### Bug Fixes
+
+* add run_id to submit response and artifact retrieval API ([67324f7](https://github.com/syntropy-systems-oss/whirr/commit/67324f74a572cc21b839c90ebe889e2d53f73ce9))
+* add wait_for_job and metrics API for programmatic job management ([f079502](https://github.com/syntropy-systems-oss/whirr/commit/f0795021f52649cb1a1c0139932dfe0896b1d8c4))
+
 ## [0.4.1](https://github.com/syntropy-systems-oss/whirr/compare/v0.4.0...v0.4.1) (2026-01-14)
 
 
