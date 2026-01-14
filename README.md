@@ -151,46 +151,40 @@ whirr runs       # Shows the run
 
 ## Server Mode (Multi-Machine)
 
-For distributed setups with multiple GPU machines:
+For distributed setups with multiple GPU machines. See the [full setup guide](docs/server-setup.md) for detailed instructions.
 
-### Start the Server
+### Quick Setup
+
+**1. Start the server (on head node):**
 
 ```bash
-# Using Docker Compose (recommended)
+export POSTGRES_PASSWORD=$(openssl rand -base64 32)
 docker-compose up -d
-
-# Or manually with PostgreSQL
-whirr server --database-url postgresql://user:pass@localhost:5432/whirr
 ```
 
-### Start Workers on GPU Machines
-
-**Option 1: Rust Worker (Recommended for production)**
-
-The Rust worker is a lightweight ~2MB binary with minimal memory footprint (~10MB RAM):
+**2. Install workers (on GPU nodes):**
 
 ```bash
-# Build the Rust worker
-cd worker-rust && cargo build --release
+# Download the Rust worker (recommended - only ~2MB, ~10MB RAM)
+curl -L https://github.com/syntropy-systems-oss/whirr/releases/latest/download/whirr-worker-linux-x86_64 \
+  -o /usr/local/bin/whirr-worker
+chmod +x /usr/local/bin/whirr-worker
 
-# Copy to GPU nodes
-scp target/release/whirr-worker gpu-node:/usr/local/bin/
+# Or use the Python worker
+pip install whirr[server]
+```
 
-# Run on GPU node
+**3. Start workers:**
+
+```bash
+# Rust worker
 whirr-worker --server http://head-node:8080 --data-dir /mnt/shared/whirr --gpu 0
-```
 
-**Option 2: Python Worker**
-
-```bash
-# On each GPU machine, connect to the server
-whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr
-
-# With GPU assignment
+# Or Python worker
 whirr worker --server http://head-node:8080 --data-dir /mnt/shared/whirr --gpu 0
 ```
 
-### Submit Jobs Remotely
+**4. Submit jobs:**
 
 ```bash
 whirr submit --server http://head-node:8080 -- python train.py --lr 0.01
