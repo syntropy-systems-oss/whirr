@@ -1,6 +1,7 @@
 """HTTP client for workers to communicate with the whirr server."""
 
 import socket
+import time
 from typing import Optional
 
 try:
@@ -369,6 +370,96 @@ class WhirrClient:
             return self._request("GET", f"/api/v1/runs/{run_id}")
         except WhirrClientError:
             return None
+
+    def get_metrics(self, run_id: str) -> list[dict]:
+        """
+        Get metrics for a run.
+
+        Args:
+            run_id: Run ID
+
+        Returns:
+            List of metric records from the run's metrics.jsonl
+        """
+        result = self._request("GET", f"/api/v1/runs/{run_id}/metrics")
+        return result.get("metrics", [])
+
+    # --- Convenience Methods ---
+
+    def wait_for_job(
+        self,
+        job_id: int,
+        poll_interval: float = 1.0,
+        timeout: Optional[float] = None,
+    ) -> dict:
+        """
+        Wait for a job to complete.
+
+        Polls the job status until it's no longer queued or running.
+
+        Args:
+            job_id: Job ID to wait for
+            poll_interval: Seconds between status checks (default: 1.0)
+            timeout: Maximum seconds to wait (default: None = wait forever)
+
+        Returns:
+            Final job dict with status
+
+        Raises:
+            TimeoutError: If timeout is reached before job completes
+            WhirrClientError: If job not found or server error
+        """
+        start = time.time()
+        while True:
+            job = self.get_job(job_id)
+            if job is None:
+                raise WhirrClientError(f"Job {job_id} not found")
+
+            status = job.get("status")
+            if status not in ("queued", "running"):
+                return job
+
+            if timeout is not None and (time.time() - start) > timeout:
+                raise TimeoutError(f"Job {job_id} did not complete within {timeout}s")
+
+            time.sleep(poll_interval)
+
+    def submit_and_wait(
+        self,
+        command_argv: list[str],
+        workdir: str,
+        name: Optional[str] = None,
+        config: Optional[dict] = None,
+        tags: Optional[list[str]] = None,
+        poll_interval: float = 1.0,
+        timeout: Optional[float] = None,
+    ) -> dict:
+        """
+        Submit a job and wait for it to complete.
+
+        Convenience method that combines submit_job() and wait_for_job().
+
+        Args:
+            command_argv: Command to run as list of arguments
+            workdir: Working directory for the command
+            name: Optional job name
+            config: Optional configuration dict
+            tags: Optional list of tags
+            poll_interval: Seconds between status checks
+            timeout: Maximum seconds to wait
+
+        Returns:
+            Final job dict with status and results
+        """
+        result = self.submit_job(
+            command_argv=command_argv,
+            workdir=workdir,
+            name=name,
+            config=config,
+            tags=tags,
+        )
+        job_id = result["job_id"]
+        return self.wait_for_job(job_id, poll_interval=poll_interval, timeout=timeout)
 
 
 # Convenience function

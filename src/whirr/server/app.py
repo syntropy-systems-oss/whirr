@@ -1,5 +1,6 @@
 """FastAPI application for the whirr server."""
 
+import json
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -349,6 +350,48 @@ def create_app(
             hostname=run.get("hostname"),
             run_dir=run.get("run_dir"),
         )
+
+    @app.get("/api/v1/runs/{run_id}/metrics", response_model=dict)
+    def get_run_metrics(run_id: str, db: Database = Depends(get_db)):
+        """Get metrics for a run.
+
+        Returns the contents of the run's metrics.jsonl file as a list of records.
+        """
+        # Verify run exists
+        run = db.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        # Find metrics file
+        run_dir = run.get("run_dir")
+        if run_dir:
+            metrics_path = Path(run_dir) / "metrics.jsonl"
+        else:
+            # Fallback to data_dir/runs/{run_id}/metrics.jsonl
+            metrics_path = app.state.data_dir / "runs" / run_id / "metrics.jsonl"
+
+        if not metrics_path.exists():
+            return {"metrics": [], "count": 0}
+
+        # Parse JSONL file
+        metrics = []
+        try:
+            with open(metrics_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            metrics.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            # Skip malformed lines (e.g., partial writes from crash)
+                            continue
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error reading metrics file: {e}",
+            )
+
+        return {"metrics": metrics, "count": len(metrics)}
 
     # --- Status Endpoints ---
 

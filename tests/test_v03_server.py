@@ -182,6 +182,61 @@ class TestClientModule:
             with pytest.raises(ImportError, match="httpx is required"):
                 whirr.client.WhirrClient("http://localhost:8080")
 
+    def test_client_wait_for_job_timeout(self):
+        """Test wait_for_job raises TimeoutError."""
+        from whirr.client import WhirrClient
+
+        client = WhirrClient("http://localhost:9999")
+        # Mock get_job to always return running status
+        client.get_job = MagicMock(return_value={"id": 1, "status": "running"})
+
+        with pytest.raises(TimeoutError, match="did not complete"):
+            client.wait_for_job(1, poll_interval=0.01, timeout=0.05)
+
+    def test_client_wait_for_job_completes(self):
+        """Test wait_for_job returns when job completes."""
+        from whirr.client import WhirrClient
+
+        client = WhirrClient("http://localhost:9999")
+        # Mock get_job to return completed after first call
+        call_count = [0]
+        def mock_get_job(job_id):
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                return {"id": job_id, "status": "completed", "exit_code": 0}
+            return {"id": job_id, "status": "running"}
+
+        client.get_job = mock_get_job
+
+        result = client.wait_for_job(1, poll_interval=0.01)
+        assert result["status"] == "completed"
+        assert call_count[0] == 2
+
+    def test_client_wait_for_job_not_found(self):
+        """Test wait_for_job raises error if job not found."""
+        from whirr.client import WhirrClient, WhirrClientError
+
+        client = WhirrClient("http://localhost:9999")
+        client.get_job = MagicMock(return_value=None)
+
+        with pytest.raises(WhirrClientError, match="not found"):
+            client.wait_for_job(999, poll_interval=0.01)
+
+    def test_client_get_metrics(self):
+        """Test get_metrics method."""
+        from whirr.client import WhirrClient
+
+        client = WhirrClient("http://localhost:9999")
+        client._request = MagicMock(return_value={
+            "metrics": [{"step": 0, "loss": 1.0}, {"step": 1, "loss": 0.5}],
+            "count": 2,
+        })
+
+        metrics = client.get_metrics("test-run")
+        assert len(metrics) == 2
+        assert metrics[0]["loss"] == 1.0
+        client._request.assert_called_with("GET", "/api/v1/runs/test-run/metrics")
+
 
 class TestServerModule:
     """Tests for the server module."""
@@ -342,6 +397,56 @@ class TestServerAPI:
         assert "queued" in data
         assert "running" in data
         assert "workers_online" in data
+
+    def test_get_run_metrics(self, client, tmp_path):
+        """Test get run metrics endpoint."""
+        import json
+
+        # Create a run in the database
+        from whirr.server.app import _db
+        _db.create_run(
+            run_id="test-run-metrics",
+            run_dir=str(tmp_path / "runs" / "test-run-metrics"),
+            name="Test Run",
+        )
+
+        # Create metrics file
+        run_dir = tmp_path / "runs" / "test-run-metrics"
+        run_dir.mkdir(parents=True)
+        metrics_file = run_dir / "metrics.jsonl"
+        with open(metrics_file, "w") as f:
+            f.write(json.dumps({"step": 0, "loss": 1.0}) + "\n")
+            f.write(json.dumps({"step": 1, "loss": 0.5}) + "\n")
+            f.write(json.dumps({"step": 2, "loss": 0.25}) + "\n")
+
+        # Get metrics via API
+        response = client.get("/api/v1/runs/test-run-metrics/metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 3
+        assert len(data["metrics"]) == 3
+        assert data["metrics"][0]["loss"] == 1.0
+        assert data["metrics"][2]["loss"] == 0.25
+
+    def test_get_run_metrics_not_found(self, client):
+        """Test get metrics for non-existent run."""
+        response = client.get("/api/v1/runs/nonexistent/metrics")
+        assert response.status_code == 404
+
+    def test_get_run_metrics_no_file(self, client, tmp_path):
+        """Test get metrics when no metrics file exists."""
+        from whirr.server.app import _db
+        _db.create_run(
+            run_id="test-run-no-metrics",
+            run_dir=str(tmp_path / "runs" / "test-run-no-metrics"),
+            name="Test Run",
+        )
+
+        response = client.get("/api/v1/runs/test-run-no-metrics/metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert data["metrics"] == []
 
 
 class TestServerCLI:

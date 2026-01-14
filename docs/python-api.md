@@ -495,3 +495,216 @@ trainer.train()
 run.summary({"final_loss": trainer.state.best_metric})
 run.finish()
 ```
+
+---
+
+## Class: `WhirrClient`
+
+HTTP client for programmatic access to a whirr server. Useful for submitting jobs,
+waiting for results, and retrieving metrics from external tools.
+
+```python
+from whirr.client import WhirrClient
+
+client = WhirrClient("http://head-node:8080")
+```
+
+**Requires:** `pip install whirr[server]` (for httpx dependency)
+
+---
+
+### `client.submit_job()`
+
+Submit a new job to the queue.
+
+```python
+client.submit_job(
+    command_argv: list[str],
+    workdir: str,
+    name: str = None,
+    config: dict = None,
+    tags: list[str] = None
+) -> dict
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `command_argv` | `list[str]` | Command to run as list of arguments |
+| `workdir` | `str` | Working directory for the command |
+| `name` | `str` | Optional job name |
+| `config` | `dict` | Optional configuration dict |
+| `tags` | `list[str]` | Optional list of tags |
+
+**Returns:** Dict with `job_id` and `message`
+
+**Example:**
+
+```python
+result = client.submit_job(
+    command_argv=["python", "train.py", "--lr", "0.01"],
+    workdir="/home/user/project",
+    name="experiment-1",
+    config={"lr": 0.01},
+    tags=["baseline"],
+)
+job_id = result["job_id"]
+```
+
+---
+
+### `client.wait_for_job()`
+
+Wait for a job to complete by polling its status.
+
+```python
+client.wait_for_job(
+    job_id: int,
+    poll_interval: float = 1.0,
+    timeout: float = None
+) -> dict
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `job_id` | `int` | Job ID to wait for |
+| `poll_interval` | `float` | Seconds between status checks (default: 1.0) |
+| `timeout` | `float` | Maximum seconds to wait (default: None = forever) |
+
+**Returns:** Final job dict with status
+
+**Raises:**
+- `TimeoutError`: If timeout reached before job completes
+- `WhirrClientError`: If job not found
+
+**Example:**
+
+```python
+# Wait indefinitely
+job = client.wait_for_job(job_id)
+print(f"Job finished with exit code: {job['exit_code']}")
+
+# With timeout
+try:
+    job = client.wait_for_job(job_id, timeout=3600)  # 1 hour max
+except TimeoutError:
+    print("Job took too long")
+```
+
+---
+
+### `client.submit_and_wait()`
+
+Submit a job and wait for it to complete (convenience method).
+
+```python
+client.submit_and_wait(
+    command_argv: list[str],
+    workdir: str,
+    name: str = None,
+    config: dict = None,
+    tags: list[str] = None,
+    poll_interval: float = 1.0,
+    timeout: float = None
+) -> dict
+```
+
+**Example:**
+
+```python
+job = client.submit_and_wait(
+    command_argv=["python", "train.py"],
+    workdir="/home/user/project",
+    name="quick-job",
+    timeout=600,  # 10 minute timeout
+)
+print(f"Finished: {job['status']}")
+```
+
+---
+
+### `client.get_metrics()`
+
+Get metrics for a completed run.
+
+```python
+client.get_metrics(run_id: str) -> list[dict]
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `run_id` | `str` | Run ID (e.g., "job-1") |
+
+**Returns:** List of metric records from the run's `metrics.jsonl`
+
+**Example:**
+
+```python
+metrics = client.get_metrics("job-1")
+for m in metrics:
+    print(f"Step {m.get('step')}: loss={m.get('loss')}")
+```
+
+---
+
+### Other Client Methods
+
+| Method | Description |
+|--------|-------------|
+| `get_job(job_id)` | Get job details |
+| `get_run(run_id)` | Get run details |
+| `get_runs(status, tag, limit)` | List runs with optional filtering |
+| `get_status()` | Get server status and statistics |
+| `cancel_job(job_id)` | Cancel a queued or running job |
+
+---
+
+### Full Example: Batch Job Submission
+
+```python
+from whirr.client import WhirrClient
+
+client = WhirrClient("http://head-node:8080")
+
+# Submit multiple jobs
+configs = [
+    {"lr": 0.01},
+    {"lr": 0.001},
+    {"lr": 0.0001},
+]
+
+job_ids = []
+for i, config in enumerate(configs):
+    result = client.submit_job(
+        command_argv=["python", "train.py", "--lr", str(config["lr"])],
+        workdir="/home/user/project",
+        name=f"sweep-{i}",
+        config=config,
+        tags=["sweep"],
+    )
+    job_ids.append(result["job_id"])
+
+print(f"Submitted {len(job_ids)} jobs")
+
+# Wait for all to complete
+results = []
+for job_id in job_ids:
+    job = client.wait_for_job(job_id)
+    if job["status"] == "completed":
+        run_id = job.get("run_id", f"job-{job_id}")
+        metrics = client.get_metrics(run_id)
+        results.append(metrics)
+    else:
+        print(f"Job {job_id} failed")
+
+# Analyze results
+for i, metrics in enumerate(results):
+    if metrics:
+        final = metrics[-1]
+        print(f"Config {i}: final loss = {final.get('loss')}")
+```
