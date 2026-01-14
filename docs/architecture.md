@@ -453,7 +453,13 @@ worker-rust/
 
 ### Docker Compose Deployment
 
-The recommended deployment uses Docker Compose:
+The recommended deployment uses Docker Compose with a `.env` file:
+
+```bash
+# .env file
+POSTGRES_PASSWORD=your-secure-password
+WHIRR_DATA_DIR=/srv/whirr  # Must be shared storage (NFS, etc.)
+```
 
 ```yaml
 services:
@@ -462,7 +468,7 @@ services:
     environment:
       POSTGRES_DB: whirr
       POSTGRES_USER: whirr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whirr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -471,12 +477,18 @@ services:
     command: whirr server --host 0.0.0.0 --port 8080
     environment:
       WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD}@postgres:5432/whirr
+      WHIRR_DATA_DIR: /data
+    volumes:
+      # Bind mount shared storage so server can read worker outputs
+      - ${WHIRR_DATA_DIR}:/data
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
 ```
+
+**Important:** `WHIRR_DATA_DIR` must point to shared storage (NFS, etc.) that workers can also access. Workers write run data directly to this filesystem.
 
 ---
 

@@ -158,8 +158,14 @@ For distributed setups with multiple GPU machines. See the [full setup guide](do
 **1. Start the server (on head node):**
 
 ```bash
-export POSTGRES_PASSWORD=$(openssl rand -base64 32)
-docker-compose up -d
+# Create .env file with configuration
+cat > .env << EOF
+POSTGRES_PASSWORD=$(openssl rand -base64 32)
+WHIRR_DATA_DIR=/srv/whirr
+EOF
+
+# Start PostgreSQL + whirr server
+docker compose up -d
 ```
 
 **2. Install workers (on GPU nodes):**

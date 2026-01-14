@@ -657,7 +657,7 @@ whirr server --port 8080
 whirr server --database-url postgresql://user:pass@localhost:5432/whirr
 
 # Start with Docker Compose (recommended for production)
-docker-compose up -d
+docker compose up -d
 ```
 
 **Notes:**

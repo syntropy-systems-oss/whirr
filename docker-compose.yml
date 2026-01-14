@@ -1,19 +1,22 @@
 # docker-compose.yml for whirr server mode
 #
 # Usage:
-#   docker-compose up -d          # Start Postgres + whirr server
-#   docker-compose logs -f        # View logs
-#   docker-compose down           # Stop services
-#   docker-compose down -v        # Stop and remove data volumes
+#   docker compose up -d          # Start Postgres + whirr server
+#   docker compose logs -f        # View logs
+#   docker compose down           # Stop services
+#   docker compose down -v        # Stop and remove data volumes
 #
-# Configuration via environment variables:
-#   WHIRR_PORT         - Server port (default: 8080)
-#   POSTGRES_PASSWORD  - Database password (required, no default)
+# Configuration:
+#   Create a .env file in the same directory with:
+#     POSTGRES_PASSWORD=your-secure-password
+#     WHIRR_DATA_DIR=/srv/whirr    # Path to shared storage (NFS mount point)
+#     WHIRR_PORT=8080              # Optional, defaults to 8080
 #
 # Workers connect with:
-#   whirr worker --server http://localhost:8080 --data-dir /path/to/shared/data
-
-version: '3.8'
+#   whirr worker --server http://localhost:8080 --data-dir /mnt/whirr
+#
+# IMPORTANT: WHIRR_DATA_DIR must point to shared storage (e.g., NFS) that
+# workers can also access. Workers write run data directly to this filesystem.
 
 services:
   postgres:
@@ -42,7 +45,8 @@ services:
       WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD}@postgres:5432/whirr
       WHIRR_DATA_DIR: /data
     volumes:
-      - whirr_data:/data
+      # Bind mount shared storage so server can read worker outputs
+      - ${WHIRR_DATA_DIR:?WHIRR_DATA_DIR is required}:/data
     ports:
       - "${WHIRR_PORT:-8080}:8080"
     depends_on:
@@ -52,6 +56,4 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  whirr_data:
     driver: local
