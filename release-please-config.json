@@ -9,6 +9,10 @@
         {
           "type": "generic",
           "path": "src/whirr/__init__.py"
+        },
+        {
+          "type": "cargo-toml",
+          "path": "worker-rust/Cargo.toml"
         }
       ]
     }
