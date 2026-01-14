@@ -384,6 +384,47 @@ class WhirrClient:
         result = self._request("GET", f"/api/v1/runs/{run_id}/metrics")
         return result.get("metrics", [])
 
+    def list_artifacts(self, run_id: str) -> list[dict]:
+        """
+        List all artifacts for a run.
+
+        Args:
+            run_id: Run ID
+
+        Returns:
+            List of artifact dicts with path, size, and modified timestamp
+        """
+        result = self._request("GET", f"/api/v1/runs/{run_id}/artifacts")
+        return result.get("artifacts", [])
+
+    def get_artifact(self, run_id: str, path: str) -> bytes:
+        """
+        Download an artifact file from a run.
+
+        Args:
+            run_id: Run ID
+            path: Relative path to the artifact within the run directory
+
+        Returns:
+            Raw file content as bytes
+
+        Raises:
+            WhirrClientError: If artifact not found or access denied
+        """
+        url = f"{self.server_url}/api/v1/runs/{run_id}/artifacts/{path}"
+        try:
+            response = self._client.get(url)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPStatusError as e:
+            try:
+                detail = e.response.json().get("detail", str(e))
+            except Exception:
+                detail = str(e)
+            raise WhirrClientError(f"Error fetching artifact: {detail}") from e
+        except httpx.RequestError as e:
+            raise WhirrClientError(f"Connection error: {e}") from e
+
     # --- Convenience Methods ---
 
     def wait_for_job(

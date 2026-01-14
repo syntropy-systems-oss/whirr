@@ -237,6 +237,42 @@ class TestClientModule:
         assert metrics[0]["loss"] == 1.0
         client._request.assert_called_with("GET", "/api/v1/runs/test-run/metrics")
 
+    def test_client_list_artifacts(self):
+        """Test list_artifacts method."""
+        from whirr.client import WhirrClient
+
+        client = WhirrClient("http://localhost:9999")
+        client._request = MagicMock(return_value={
+            "artifacts": [
+                {"path": "metrics.jsonl", "size": 100},
+                {"path": "output.log", "size": 500},
+            ],
+            "count": 2,
+        })
+
+        artifacts = client.list_artifacts("test-run")
+        assert len(artifacts) == 2
+        assert artifacts[0]["path"] == "metrics.jsonl"
+        client._request.assert_called_with("GET", "/api/v1/runs/test-run/artifacts")
+
+    def test_client_get_artifact(self):
+        """Test get_artifact method."""
+        from whirr.client import WhirrClient
+
+        client = WhirrClient("http://localhost:9999")
+
+        # Mock the httpx client's get method
+        mock_response = MagicMock()
+        mock_response.content = b"file content here"
+        mock_response.raise_for_status = MagicMock()
+        client._client.get = MagicMock(return_value=mock_response)
+
+        content = client.get_artifact("test-run", "output.log")
+        assert content == b"file content here"
+        client._client.get.assert_called_with(
+            "http://localhost:9999/api/v1/runs/test-run/artifacts/output.log"
+        )
+
 
 class TestServerModule:
     """Tests for the server module."""
@@ -447,6 +483,108 @@ class TestServerAPI:
         data = response.json()
         assert data["count"] == 0
         assert data["metrics"] == []
+
+    def test_create_job_returns_run_id(self, client):
+        """Test job creation returns run_id and run_dir."""
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "command_argv": ["python", "test.py"],
+                "workdir": "/tmp",
+                "name": "test-job",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "job_id" in data
+        assert "run_id" in data
+        assert "run_dir" in data
+        assert data["run_id"] == f"job-{data['job_id']}"
+
+    def test_list_artifacts(self, client, tmp_path):
+        """Test list artifacts endpoint."""
+        from whirr.server.app import _db
+
+        # Create a run with some files
+        run_dir = tmp_path / "runs" / "test-artifacts"
+        run_dir.mkdir(parents=True)
+        (run_dir / "metrics.jsonl").write_text('{"loss": 0.5}\n')
+        (run_dir / "output.log").write_text("some output\n")
+        artifacts_dir = run_dir / "artifacts"
+        artifacts_dir.mkdir()
+        (artifacts_dir / "model.pt").write_bytes(b"model data")
+
+        _db.create_run(
+            run_id="test-artifacts",
+            run_dir=str(run_dir),
+            name="Test Run",
+        )
+
+        response = client.get("/api/v1/runs/test-artifacts/artifacts")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 3
+
+        paths = [a["path"] for a in data["artifacts"]]
+        assert "metrics.jsonl" in paths
+        assert "output.log" in paths
+        assert "artifacts/model.pt" in paths
+
+    def test_list_artifacts_not_found(self, client):
+        """Test list artifacts for non-existent run."""
+        response = client.get("/api/v1/runs/nonexistent/artifacts")
+        assert response.status_code == 404
+
+    def test_get_artifact(self, client, tmp_path):
+        """Test get artifact endpoint."""
+        from whirr.server.app import _db
+
+        # Create a run with a file
+        run_dir = tmp_path / "runs" / "test-get-artifact"
+        run_dir.mkdir(parents=True)
+        (run_dir / "output.log").write_text("hello world\n")
+
+        _db.create_run(
+            run_id="test-get-artifact",
+            run_dir=str(run_dir),
+            name="Test Run",
+        )
+
+        response = client.get("/api/v1/runs/test-get-artifact/artifacts/output.log")
+        assert response.status_code == 200
+        assert response.content == b"hello world\n"
+
+    def test_get_artifact_not_found(self, client, tmp_path):
+        """Test get artifact that doesn't exist."""
+        from whirr.server.app import _db
+
+        run_dir = tmp_path / "runs" / "test-artifact-missing"
+        run_dir.mkdir(parents=True)
+
+        _db.create_run(
+            run_id="test-artifact-missing",
+            run_dir=str(run_dir),
+            name="Test Run",
+        )
+
+        response = client.get("/api/v1/runs/test-artifact-missing/artifacts/missing.txt")
+        assert response.status_code == 404
+
+    def test_get_artifact_path_traversal(self, client, tmp_path):
+        """Test get artifact blocks path traversal."""
+        from whirr.server.app import _db
+
+        run_dir = tmp_path / "runs" / "test-traversal"
+        run_dir.mkdir(parents=True)
+
+        _db.create_run(
+            run_id="test-traversal",
+            run_dir=str(run_dir),
+            name="Test Run",
+        )
+
+        response = client.get("/api/v1/runs/test-traversal/artifacts/../../../etc/passwd")
+        assert response.status_code == 403
 
 
 class TestServerCLI:

@@ -537,7 +537,7 @@ client.submit_job(
 | `config` | `dict` | Optional configuration dict |
 | `tags` | `list[str]` | Optional list of tags |
 
-**Returns:** Dict with `job_id` and `message`
+**Returns:** Dict with `job_id`, `run_id`, `run_dir`, and `message`
 
 **Example:**
 
@@ -550,6 +550,8 @@ result = client.submit_job(
     tags=["baseline"],
 )
 job_id = result["job_id"]
+run_id = result["run_id"]  # e.g., "job-1"
+run_dir = result["run_dir"]  # e.g., "/srv/whirr/runs/job-1"
 ```
 
 ---
@@ -648,6 +650,69 @@ client.get_metrics(run_id: str) -> list[dict]
 metrics = client.get_metrics("job-1")
 for m in metrics:
     print(f"Step {m.get('step')}: loss={m.get('loss')}")
+```
+
+---
+
+### `client.list_artifacts()`
+
+List all files in a run directory.
+
+```python
+client.list_artifacts(run_id: str) -> list[dict]
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `run_id` | `str` | Run ID (e.g., "job-1") |
+
+**Returns:** List of artifact dicts with `path`, `size`, and `modified` timestamp
+
+**Example:**
+
+```python
+artifacts = client.list_artifacts("job-1")
+for a in artifacts:
+    print(f"{a['path']} ({a['size']} bytes)")
+
+# Output:
+# metrics.jsonl (1234 bytes)
+# output.log (5678 bytes)
+# artifacts/model.pt (1000000 bytes)
+```
+
+---
+
+### `client.get_artifact()`
+
+Download a file from a run directory.
+
+```python
+client.get_artifact(run_id: str, path: str) -> bytes
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `run_id` | `str` | Run ID (e.g., "job-1") |
+| `path` | `str` | Relative path to the file (e.g., "output.log") |
+
+**Returns:** Raw file content as bytes
+
+**Example:**
+
+```python
+# Download log file
+log_content = client.get_artifact("job-1", "output.log")
+print(log_content.decode())
+
+# Download model checkpoint
+model_bytes = client.get_artifact("job-1", "artifacts/model.pt")
+with open("downloaded_model.pt", "wb") as f:
+    f.write(model_bytes)
 ```
 
 ---

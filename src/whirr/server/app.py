@@ -1,6 +1,7 @@
 """FastAPI application for the whirr server."""
 
 import json
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -10,7 +11,7 @@ from time import sleep
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from ..db import Database, PostgresDatabase, SQLiteDatabase, get_database
 from .models import (
@@ -165,7 +166,10 @@ def create_app(
 
     @app.post("/api/v1/jobs", response_model=dict)
     def create_job(request: JobCreate, db: Database = Depends(get_db)):
-        """Submit a new job to the queue."""
+        """Submit a new job to the queue.
+
+        Returns job_id, run_id (reserved immediately), and run_dir path.
+        """
         job_id = db.create_job(
             command_argv=request.command_argv,
             workdir=request.workdir,
@@ -173,7 +177,15 @@ def create_app(
             config=request.config,
             tags=request.tags,
         )
-        return {"job_id": job_id, "message": f"Job {job_id} created"}
+        # Reserve run_id immediately so callers know where results will be
+        run_id = f"job-{job_id}"
+        run_dir = str(app.state.data_dir / "runs" / run_id)
+        return {
+            "job_id": job_id,
+            "run_id": run_id,
+            "run_dir": run_dir,
+            "message": f"Job {job_id} created",
+        }
 
     @app.post("/api/v1/jobs/claim", response_model=JobClaimResponse)
     def claim_job(request: JobClaim, db: Database = Depends(get_db)):
@@ -392,6 +404,115 @@ def create_app(
             )
 
         return {"metrics": metrics, "count": len(metrics)}
+
+    @app.get("/api/v1/runs/{run_id}/artifacts", response_model=dict)
+    def list_run_artifacts(run_id: str, db: Database = Depends(get_db)):
+        """List all artifacts for a run.
+
+        Returns files in the run directory with name, size, and modified time.
+        """
+        # Verify run exists
+        run = db.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        # Find run directory
+        run_dir = run.get("run_dir")
+        if run_dir:
+            run_path = Path(run_dir)
+        else:
+            run_path = app.state.data_dir / "runs" / run_id
+
+        if not run_path.exists():
+            return {"artifacts": [], "count": 0}
+
+        # List all files recursively
+        artifacts = []
+        try:
+            for file_path in run_path.rglob("*"):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(run_path)
+                    stat = file_path.stat()
+                    artifacts.append({
+                        "path": str(rel_path),
+                        "size": stat.st_size,
+                        "modified": datetime.fromtimestamp(
+                            stat.st_mtime, tz=timezone.utc
+                        ).isoformat(),
+                    })
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error listing artifacts: {e}",
+            )
+
+        # Sort by path for consistent ordering
+        artifacts.sort(key=lambda x: x["path"])
+        return {"artifacts": artifacts, "count": len(artifacts)}
+
+    @app.get("/api/v1/runs/{run_id}/artifacts/{artifact_path:path}")
+    def get_run_artifact(run_id: str, artifact_path: str, db: Database = Depends(get_db)):
+        """Download an artifact file from a run.
+
+        Returns the raw file content with appropriate content-type.
+        """
+        # Verify run exists
+        run = db.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        # Find run directory
+        run_dir = run.get("run_dir")
+        if run_dir:
+            run_path = Path(run_dir)
+        else:
+            run_path = app.state.data_dir / "runs" / run_id
+
+        # Resolve the artifact path safely
+        file_path = (run_path / artifact_path).resolve()
+
+        # Security: ensure the path is within the run directory
+        try:
+            file_path.relative_to(run_path.resolve())
+        except ValueError:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: path traversal not allowed",
+            )
+
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Artifact not found: {artifact_path}",
+            )
+
+        if not file_path.is_file():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not a file: {artifact_path}",
+            )
+
+        # Read file content
+        try:
+            content = file_path.read_bytes()
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error reading artifact: {e}",
+            )
+
+        # Guess content type
+        content_type, _ = mimetypes.guess_type(str(file_path))
+        if content_type is None:
+            content_type = "application/octet-stream"
+
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_path.name}"',
+            },
+        )
 
     # --- Status Endpoints ---
 

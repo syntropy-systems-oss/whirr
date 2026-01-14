@@ -422,11 +422,13 @@ class PostgresDatabase(Database): ... # Server mode
 | `/api/v1/jobs/claim` | POST | Claim next available job |
 | `/api/v1/jobs/{id}/heartbeat` | POST | Renew job lease |
 | `/api/v1/jobs/{id}/complete` | POST | Mark job complete |
-| `/api/v1/jobs` | POST | Submit a new job |
+| `/api/v1/jobs` | POST | Submit a new job (returns job_id, run_id, run_dir) |
 | `/api/v1/jobs/{id}` | GET | Get job details |
 | `/api/v1/runs` | GET | List runs |
 | `/api/v1/runs/{id}` | GET | Get run details |
 | `/api/v1/runs/{id}/metrics` | GET | Get run metrics (from metrics.jsonl) |
+| `/api/v1/runs/{id}/artifacts` | GET | List all files in run directory |
+| `/api/v1/runs/{id}/artifacts/{path}` | GET | Download a file from run directory |
 | `/api/v1/status` | GET | Get queue status |
 | `/health` | GET | Health check |
 
