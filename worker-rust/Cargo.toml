@@ -1,6 +1,6 @@
 [package]
 name = "whirr-worker"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Lightweight worker for whirr GPU job orchestration"
 license = "MIT"
