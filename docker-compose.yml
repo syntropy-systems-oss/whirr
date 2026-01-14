@@ -8,7 +8,7 @@
 #
 # Configuration via environment variables:
 #   WHIRR_PORT         - Server port (default: 8080)
-#   POSTGRES_PASSWORD  - Database password (default: whirr)
+#   POSTGRES_PASSWORD  - Database password (required, no default)
 #
 # Workers connect with:
 #   whirr worker --server http://localhost:8080 --data-dir /path/to/shared/data
@@ -21,7 +21,7 @@ services:
     environment:
       POSTGRES_DB: whirr
       POSTGRES_USER: whirr
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whirr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile
     command: whirr server --host 0.0.0.0 --port 8080
     environment:
-      WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD:-whirr}@postgres:5432/whirr
+      WHIRR_DATABASE_URL: postgresql://whirr:${POSTGRES_PASSWORD}@postgres:5432/whirr
       WHIRR_DATA_DIR: /data
     volumes:
       - whirr_data:/data
