@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import socket
 import sqlite3
 from abc import ABC, abstractmethod
@@ -12,16 +11,35 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional, Protocol, cast
 
+from pydantic import TypeAdapter
 from typing_extensions import Self, override
 
 from whirr.models.base import JSONValue
 from whirr.models.db import JobRecord, RunRecord, WorkerRecord
+from whirr.models.run import RunConfig, RunSummary
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 JSONDict = dict[str, JSONValue]
 RowData = Mapping[str, object]
+_LIST_STR_ADAPTER = TypeAdapter(list[str])
+
+
+def _dump_json_list(values: Sequence[str]) -> str:
+    return _LIST_STR_ADAPTER.dump_json(list(values)).decode("utf-8")
+
+
+def _dump_run_config(config: JSONDict | RunConfig) -> str:
+    if isinstance(config, RunConfig):
+        return config.model_dump_json()
+    return RunConfig.model_validate(config).model_dump_json()
+
+
+def _dump_run_summary(summary: JSONDict | RunSummary) -> str:
+    if isinstance(summary, RunSummary):
+        return summary.model_dump_json()
+    return RunSummary.model_validate(summary).model_dump_json()
 
 
 def _row_to_dict(row: sqlite3.Row | RowData) -> dict[str, object]:
@@ -482,10 +500,10 @@ class SQLiteDatabase(Database):
             """,
             (
                 name,
-                json.dumps(command_argv),
+                _dump_json_list(command_argv),
                 workdir,
-                json.dumps(config) if config else None,
-                json.dumps(tags) if tags else None,
+                _dump_run_config(config) if config else None,
+                _dump_json_list(tags) if tags else None,
                 parent_job_id,
                 1 if parent_job_id is None else None,
             ),
@@ -714,8 +732,8 @@ class SQLiteDatabase(Database):
                 run_id,
                 job_id,
                 name,
-                json.dumps(config) if config else None,
-                json.dumps(tags) if tags else None,
+                _dump_run_config(config) if config else None,
+                _dump_json_list(tags) if tags else None,
                 run_dir,
                 socket.gethostname(),
             ),
@@ -749,7 +767,13 @@ class SQLiteDatabase(Database):
             SET status = ?, finished_at = ?, duration_seconds = ?, summary = ?
             WHERE id = ?
             """,
-            (status, now, duration, json.dumps(summary) if summary else None, run_id),
+            (
+                status,
+                now,
+                duration,
+                _dump_run_summary(summary) if summary else None,
+                run_id,
+            ),
         )
 
     @override
@@ -943,10 +967,10 @@ class PostgresDatabase(Database):
             """,
             (
                 name,
-                json.dumps(command_argv),
+                _dump_json_list(command_argv),
                 workdir,
-                json.dumps(config) if config else None,
-                json.dumps(tags) if tags else None,
+                _dump_run_config(config) if config else None,
+                _dump_json_list(tags) if tags else None,
                 parent_job_id,
                 1 if parent_job_id is None else None,
             ),
@@ -1186,8 +1210,8 @@ class PostgresDatabase(Database):
                 run_id,
                 job_id,
                 name,
-                json.dumps(config) if config else None,
-                json.dumps(tags) if tags else None,
+                _dump_run_config(config) if config else None,
+                _dump_json_list(tags) if tags else None,
                 run_dir,
                 socket.gethostname(),
             ),
@@ -1223,7 +1247,7 @@ class PostgresDatabase(Database):
                 summary = %s
             WHERE id = %s
             """,
-            (status, duration, json.dumps(summary) if summary else None, run_id),
+            (status, duration, _dump_run_summary(summary) if summary else None, run_id),
         )
         self.conn.commit()
 
@@ -1424,10 +1448,10 @@ def create_job(  # noqa: PLR0913
         """,
         (
             name,
-            json.dumps(command_argv),
+            _dump_json_list(command_argv),
             workdir,
-            json.dumps(config) if config else None,
-            json.dumps(tags) if tags else None,
+            _dump_run_config(config) if config else None,
+            _dump_json_list(tags) if tags else None,
             parent_job_id,
             1 if parent_job_id is None else None,
         ),
@@ -1685,10 +1709,10 @@ def retry_job(conn: sqlite3.Connection, job_id: int) -> int:
         """,
         (
             original.name,
-            json.dumps(original.command_argv),
+            _dump_json_list(original.command_argv),
             original.workdir,
-            json.dumps(original.config.values) if original.config else None,
-            json.dumps(original.tags) if original.tags else None,
+            _dump_run_config(original.config) if original.config else None,
+            _dump_json_list(original.tags) if original.tags else None,
             job_id,
             original.attempt + 1,
             now,
@@ -1731,8 +1755,8 @@ def create_run(  # noqa: PLR0913
             run_id,
             job_id,
             name,
-            json.dumps(config) if config else None,
-            json.dumps(tags) if tags else None,
+            _dump_run_config(config) if config else None,
+            _dump_json_list(tags) if tags else None,
             run_dir,
             socket.gethostname(),
         ),
@@ -1763,7 +1787,13 @@ def complete_run(
         SET status = ?, finished_at = ?, duration_seconds = ?, summary = ?
         WHERE id = ?
         """,
-        (status, now, duration, json.dumps(summary) if summary else None, run_id),
+        (
+            status,
+            now,
+            duration,
+            _dump_run_summary(summary) if summary else None,
+            run_id,
+        ),
     )
 
 

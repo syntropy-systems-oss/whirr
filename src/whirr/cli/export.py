@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import typer
+from pydantic import TypeAdapter
 from rich.console import Console
 
 from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import get_connection, get_runs
+from whirr.models.base import JSONValue
 from whirr.run import read_meta, read_metrics
 
 if TYPE_CHECKING:
-    from whirr.models.base import JSONValue
     from whirr.models.run import RunMetricRecord
 
 console = Console()
+_JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, JSONValue])
+_EXPORT_ADAPTER = TypeAdapter(list[dict[str, JSONValue]])
 
 
 def _to_csv_value(value: JSONValue | None) -> str | float | list[str] | None:
@@ -29,7 +31,7 @@ def _to_csv_value(value: JSONValue | None) -> str | float | list[str] | None:
     if isinstance(value, list):
         return [str(item) for item in value]
     if isinstance(value, dict):
-        return json.dumps(value)
+        return _JSON_OBJECT_ADAPTER.dump_json(value).decode("utf-8")
     return str(value)
 
 
@@ -128,8 +130,7 @@ def export(
 
         # Write output
         if suffix == ".json":
-            with output.open("w") as f:
-                json.dump(export_data, f, indent=2, default=str)
+            _ = output.write_bytes(_EXPORT_ADAPTER.dump_json(export_data, indent=2))
         else:
             # CSV - flatten config and summary
             fieldnames = [

@@ -2,7 +2,6 @@
 """whirr dashboard - FastAPI server with HTMX + Tailwind."""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Protocol, cast
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Annotated, Protocol, cast
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import TypeAdapter, ValidationError
 
 import whirr
 from whirr.config import get_db_path, require_whirr_dir
@@ -34,6 +34,7 @@ SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR
 
 app = FastAPI(title="whirr dashboard", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+_JSON_VALUE_ADAPTER: TypeAdapter[object] = TypeAdapter(object)
 
 
 def get_db() -> sqlite3.Connection:
@@ -83,8 +84,8 @@ def deserialize_json_field(value: object) -> object:
     """Deserialize a JSON field if it's a string."""
     if isinstance(value, str):
         try:
-            return cast("object", json.loads(value))
-        except (json.JSONDecodeError, TypeError):
+            return _JSON_VALUE_ADAPTER.validate_json(value)
+        except ValidationError:
             return value
     return value
 

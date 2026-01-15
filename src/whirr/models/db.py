@@ -3,21 +3,14 @@
 
 from __future__ import annotations
 
-import json
-from typing import Optional, cast
+from typing import cast
 
-from pydantic import Field, field_validator
+from pydantic import Field, TypeAdapter, field_validator
 
 from .base import WhirrBaseModel
 from .run import RunConfig, RunSummary
 
-
-def _loads_json(value: object) -> object:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return cast("object", json.loads(value))
-    return value
+_LIST_STR_ADAPTER = TypeAdapter(list[str])
 
 
 class JobRecord(WhirrBaseModel):
@@ -51,7 +44,7 @@ class JobRecord(WhirrBaseModel):
         if value is None:
             return []
         if isinstance(value, str):
-            return cast("list[str]", json.loads(value))
+            return _LIST_STR_ADAPTER.validate_json(value)
         return cast("list[str]", value)
 
     @field_validator("config", mode="before")
@@ -59,16 +52,18 @@ class JobRecord(WhirrBaseModel):
     def _parse_config(cls, value: object) -> RunConfig | None:
         if value is None:
             return None
-        parsed = _loads_json(value)
-        return RunConfig.model_validate(parsed)
+        if isinstance(value, str):
+            return RunConfig.model_validate_json(value)
+        return RunConfig.model_validate(value)
 
     @field_validator("tags", mode="before")
     @classmethod
     def _parse_tags(cls, value: object) -> list[str] | None:
         if value is None:
             return None
-        parsed = _loads_json(value)
-        return cast("Optional[list[str]]", parsed)
+        if isinstance(value, str):
+            return _LIST_STR_ADAPTER.validate_json(value)
+        return cast("list[str]", value)
 
 
 class RunRecord(WhirrBaseModel):
@@ -94,24 +89,27 @@ class RunRecord(WhirrBaseModel):
     def _parse_config(cls, value: object) -> RunConfig | None:
         if value is None:
             return None
-        parsed = _loads_json(value)
-        return RunConfig.model_validate(parsed)
+        if isinstance(value, str):
+            return RunConfig.model_validate_json(value)
+        return RunConfig.model_validate(value)
 
     @field_validator("tags", mode="before")
     @classmethod
     def _parse_tags(cls, value: object) -> list[str] | None:
         if value is None:
             return None
-        parsed = _loads_json(value)
-        return cast("Optional[list[str]]", parsed)
+        if isinstance(value, str):
+            return _LIST_STR_ADAPTER.validate_json(value)
+        return cast("list[str]", value)
 
     @field_validator("summary", mode="before")
     @classmethod
     def _parse_summary(cls, value: object) -> RunSummary | None:
         if value is None:
             return None
-        parsed = _loads_json(value)
-        return RunSummary.model_validate(parsed)
+        if isinstance(value, str):
+            return RunSummary.model_validate_json(value)
+        return RunSummary.model_validate(value)
 
 
 class WorkerRecord(WhirrBaseModel):

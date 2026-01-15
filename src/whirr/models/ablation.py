@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, TypeAlias, cast
 
 from pydantic import (
     Field,
     PrivateAttr,
+    TypeAdapter,
     field_validator,
     model_serializer,
     model_validator,
@@ -21,6 +21,7 @@ from .base import JSONValue, WhirrBaseModel
 if TYPE_CHECKING:
     from pathlib import Path
 
+_ENTRIES_ADAPTER = TypeAdapter(dict[str, str])
 
 class FileValue(WhirrBaseModel):
     """File reference with inlined content."""
@@ -164,7 +165,7 @@ class AblationIndex(WhirrBaseModel):
         if isinstance(value, dict):
             return cast("dict[str, str]", value)
         if isinstance(value, str):
-            return cast("dict[str, str]", json.loads(value))
+            return _ENTRIES_ADAPTER.validate_json(value)
         return cast("dict[str, str]", value)
 
     @model_serializer(mode="plain")
