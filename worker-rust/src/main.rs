@@ -6,14 +6,14 @@
 mod client;
 mod runner;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, thread};
 
 use clap::Parser;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use client::WhirrClient;
 use runner::JobRunner;
@@ -23,7 +23,7 @@ use runner::JobRunner;
 #[command(name = "whirr-worker")]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Server URL (e.g., http://head-node:8080)
+    /// Server URL (e.g., <http://head-node:8080>)
     #[arg(short, long, env = "WHIRR_SERVER_URL")]
     server: String,
 
@@ -57,24 +57,24 @@ fn main() {
     // Set CUDA_VISIBLE_DEVICES if GPU specified
     if let Some(gpu) = args.gpu {
         env::set_var("CUDA_VISIBLE_DEVICES", gpu.to_string());
-        info!("Set CUDA_VISIBLE_DEVICES={}", gpu);
+        info!("Set CUDA_VISIBLE_DEVICES={gpu}");
     }
 
     // Generate worker ID
     let hostname = gethostname();
-    let worker_id = match args.gpu {
-        Some(gpu) => format!("{}:gpu{}", hostname, gpu),
-        None => format!("{}:default", hostname),
-    };
+    let worker_id = args.gpu.map_or_else(
+        || format!("{hostname}:default"),
+        |gpu| format!("{hostname}:gpu{gpu}"),
+    );
 
-    info!("Starting whirr-worker: {}", worker_id);
-    info!("Server: {}", args.server);
-    info!("Data directory: {}", args.data_dir.display());
+    info!("Starting whirr-worker: {worker_id}");
+    info!("Server: {server}", server = &args.server);
+    info!("Data directory: {data_dir}", data_dir = args.data_dir.display());
 
     // Ensure data directory exists
     let runs_dir = args.data_dir.join("runs");
     if let Err(e) = std::fs::create_dir_all(&runs_dir) {
-        error!("Failed to create runs directory: {}", e);
+        error!("Failed to create runs directory: {e}");
         std::process::exit(1);
     }
 
@@ -82,7 +82,7 @@ fn main() {
     let shutdown = Arc::new(AtomicBool::new(false));
     let shutdown_clone = shutdown.clone();
 
-    ctrlc::set_handler(move || {
+    if let Err(e) = ctrlc::set_handler(move || {
         if shutdown_clone.load(Ordering::SeqCst) {
             // Second Ctrl+C - force exit
             warn!("Force shutdown requested");
@@ -90,8 +90,10 @@ fn main() {
         }
         info!("Shutdown requested, finishing current job...");
         shutdown_clone.store(true, Ordering::SeqCst);
-    })
-    .expect("Failed to set Ctrl+C handler");
+    }) {
+        error!("Failed to set Ctrl+C handler: {e}");
+        std::process::exit(1);
+    }
 
     // Create client
     let client = WhirrClient::new(&args.server);
@@ -99,7 +101,7 @@ fn main() {
     // Register with server
     let gpu_ids = args.gpu.map(|g| vec![g]).unwrap_or_default();
     if let Err(e) = client.register_worker(&worker_id, &hostname, &gpu_ids) {
-        error!("Failed to register with server: {}", e);
+        error!("Failed to register with server: {e}");
         std::process::exit(1);
     }
     info!("Registered with server");
@@ -117,11 +119,11 @@ fn main() {
 
     // Unregister on exit
     if let Err(e) = client.unregister_worker(&worker_id) {
-        warn!("Failed to unregister: {}", e);
+        warn!("Failed to unregister: {e}");
     }
 
     if let Err(e) = result {
-        error!("Worker error: {}", e);
+        error!("Worker error: {e}");
         std::process::exit(1);
     }
 
@@ -131,7 +133,7 @@ fn main() {
 fn worker_loop(
     client: &WhirrClient,
     worker_id: &str,
-    runs_dir: &PathBuf,
+    runs_dir: &Path,
     shutdown: &Arc<AtomicBool>,
     poll_interval: Duration,
     heartbeat_interval: Duration,
@@ -142,41 +144,44 @@ fn worker_loop(
         let job = match client.claim_job(worker_id, lease_seconds) {
             Ok(job) => job,
             Err(e) => {
-                warn!("Failed to claim job: {}", e);
+                warn!("Failed to claim job: {e}");
                 thread::sleep(poll_interval);
                 continue;
             }
         };
 
-        let job = match job {
-            Some(j) => j,
-            None => {
-                // No jobs available
-                thread::sleep(poll_interval);
-                continue;
-            }
+        let Some(job) = job else {
+            // No jobs available
+            thread::sleep(poll_interval);
+            continue;
         };
 
         let job_id = job.id;
-        info!("Claimed job #{}: {}", job_id, job.name.as_deref().unwrap_or(&job.command_argv[0]));
+        info!(
+            "Claimed job #{job_id}: {job_name}",
+            job_name = job.name.as_deref().unwrap_or(&job.command_argv[0])
+        );
+        if let Some(tags) = job.tags.as_ref() {
+            debug!("Job tags: {tags:?}");
+        }
 
         // Create run directory
-        let run_id = format!("job-{}", job_id);
-        let run_dir = runs_dir.join(&run_id);
-        std::fs::create_dir_all(&run_dir)?;
-        std::fs::create_dir_all(run_dir.join("artifacts"))?;
+        let run_id = format!("job-{job_id}");
+        let job_run_dir = runs_dir.join(&run_id);
+        std::fs::create_dir_all(&job_run_dir)?;
+        std::fs::create_dir_all(job_run_dir.join("artifacts"))?;
 
         // Start job
         let mut runner = JobRunner::new(
             job.command_argv.clone(),
             PathBuf::from(&job.workdir),
-            run_dir.clone(),
+            job_run_dir.clone(),
             job_id,
             run_id.clone(),
         );
 
         if let Err(e) = runner.start() {
-            error!("Failed to start job: {}", e);
+            error!("Failed to start job: {e}");
             client.complete_job(job_id, worker_id, 1, Some(&run_id), Some(&e.to_string()))?;
             continue;
         }
@@ -194,7 +199,7 @@ fn worker_loop(
             // Check for shutdown or cancellation
             if shutdown.load(Ordering::SeqCst) || cancel_requested {
                 let reason = if shutdown.load(Ordering::SeqCst) { "shutdown" } else { "cancelled" };
-                warn!("Killing job ({})...", reason);
+                warn!("Killing job ({reason})...");
                 let code = runner.kill()?;
                 break code;
             }
@@ -208,7 +213,7 @@ fn worker_loop(
                         }
                     }
                     Err(e) => {
-                        warn!("Heartbeat failed: {}", e);
+                        warn!("Heartbeat failed: {e}");
                     }
                 }
                 last_heartbeat = std::time::Instant::now();
@@ -219,19 +224,19 @@ fn worker_loop(
 
         // Report completion
         let error_message = if exit_code != 0 {
-            Some(format!("Exit code: {}", exit_code))
+            Some(format!("Exit code: {exit_code}"))
         } else {
             None
         };
 
         if let Err(e) = client.complete_job(job_id, worker_id, exit_code, Some(&run_id), error_message.as_deref()) {
-            warn!("Failed to report completion: {}", e);
+            warn!("Failed to report completion: {e}");
         }
 
         if exit_code == 0 {
-            info!("Job #{} completed", job_id);
+            info!("Job #{job_id} completed");
         } else {
-            warn!("Job #{} failed (exit code: {})", job_id, exit_code);
+            warn!("Job #{job_id} failed (exit code: {exit_code})");
         }
 
         // Exit loop if shutdown requested
@@ -245,6 +250,5 @@ fn worker_loop(
 
 fn gethostname() -> String {
     hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".to_string())
+        .map_or_else(|_| "unknown".to_string(), |h| h.to_string_lossy().to_string())
 }

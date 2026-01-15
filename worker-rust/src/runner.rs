@@ -12,6 +12,8 @@ use log::debug;
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
+#[cfg(unix)]
+use nix::unistd::Pid;
 
 /// Manages the execution of a single job.
 pub struct JobRunner {
@@ -27,7 +29,7 @@ pub struct JobRunner {
 
 impl JobRunner {
     /// Create a new job runner.
-    pub fn new(
+    pub const fn new(
         command_argv: Vec<String>,
         workdir: PathBuf,
         run_dir: PathBuf,
@@ -56,9 +58,9 @@ impl JobRunner {
         let log_file = File::create(&log_path)?;
         let log_file_stderr = log_file.try_clone()?;
 
-        debug!("Starting job in {:?}", self.workdir);
-        debug!("Command: {:?}", self.command_argv);
-        debug!("Log file: {:?}", log_path);
+        debug!("Starting job in {workdir}", workdir = self.workdir.display());
+        debug!("Command: {command_argv:?}", command_argv = &self.command_argv);
+        debug!("Log file: {log_path}", log_path = log_path.display());
 
         let mut cmd = Command::new(&self.command_argv[0]);
         cmd.args(&self.command_argv[1..])
@@ -69,21 +71,17 @@ impl JobRunner {
             .env("WHIRR_RUN_DIR", self.run_dir.to_string_lossy().to_string())
             .env("WHIRR_RUN_ID", &self.run_id);
 
-        // On Unix, create a new process group for clean termination
+        // On Unix, create a new process group for clean termination.
         #[cfg(unix)]
-        unsafe {
-            cmd.pre_exec(|| {
-                // Create new process group
-                nix::unistd::setsid().ok();
-                Ok(())
-            });
+        {
+            cmd.process_group(0);
         }
 
         let child = cmd.spawn()?;
 
         #[cfg(unix)]
         {
-            self.pgid = Some(child.id() as i32);
+            self.pgid = Some(i32::try_from(child.id())?);
         }
 
         self.child = Some(child);
@@ -91,21 +89,13 @@ impl JobRunner {
     }
 
     /// Check if the job has finished without blocking.
-    /// Returns Some(exit_code) if finished, None if still running.
+    /// Returns `Some(exit_code)` if finished, `None` if still running.
     pub fn try_wait(&mut self) -> Result<Option<i32>, Box<dyn std::error::Error>> {
         let child = self.child.as_mut().ok_or("Job not started")?;
 
-        match child.try_wait()? {
-            Some(status) => Ok(Some(status.code().unwrap_or(-1))),
-            None => Ok(None),
-        }
-    }
-
-    /// Wait for the job to complete.
-    pub fn wait(&mut self) -> Result<i32, Box<dyn std::error::Error>> {
-        let child = self.child.as_mut().ok_or("Job not started")?;
-        let status = child.wait()?;
-        Ok(status.code().unwrap_or(-1))
+        Ok(child
+            .try_wait()?
+            .map(|status| status.code().unwrap_or(-1)))
     }
 
     /// Kill the job and all its children.
@@ -114,10 +104,9 @@ impl JobRunner {
         {
             if let Some(pgid) = self.pgid {
                 use nix::sys::signal::{killpg, Signal};
-                use nix::unistd::Pid;
 
                 // Send SIGTERM to process group
-                debug!("Sending SIGTERM to process group {}", pgid);
+                debug!("Sending SIGTERM to process group {pgid}");
                 let _ = killpg(Pid::from_raw(pgid), Signal::SIGTERM);
 
                 // Wait a bit for graceful shutdown
@@ -125,14 +114,12 @@ impl JobRunner {
 
                 // Check if still running
                 if let Some(child) = &mut self.child {
-                    match child.try_wait()? {
-                        Some(status) => return Ok(status.code().unwrap_or(-1)),
-                        None => {
-                            // Still running, send SIGKILL
-                            debug!("Sending SIGKILL to process group {}", pgid);
-                            let _ = killpg(Pid::from_raw(pgid), Signal::SIGKILL);
-                        }
+                    if let Some(status) = child.try_wait()? {
+                        return Ok(status.code().unwrap_or(-1));
                     }
+                    // Still running, send SIGKILL
+                    debug!("Sending SIGKILL to process group {pgid}");
+                    let _ = killpg(Pid::from_raw(pgid), Signal::SIGKILL);
                 }
             }
         }

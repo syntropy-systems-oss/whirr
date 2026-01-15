@@ -36,3 +36,14 @@ lto = true          # Link-time optimization
 codegen-units = 1   # Better optimization
 panic = "abort"     # Smaller binary, no unwinding
 strip = true        # Strip symbols
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = "deny"
+nursery = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
