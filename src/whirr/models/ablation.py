@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Union, cast
 
 from pydantic import (
     Field,
@@ -30,7 +30,7 @@ class FileValue(WhirrBaseModel):
     text: str
 
 
-ConfigValue: TypeAlias = JSONValue | FileValue
+ConfigValue: TypeAlias = Union[JSONValue, FileValue]
 
 
 class AblationRunResult(WhirrBaseModel):
