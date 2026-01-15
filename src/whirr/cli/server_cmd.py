@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -14,13 +15,13 @@ console = Console()
 def server(
     port: int = typer.Option(8080, "--port", "-p", help="Port to listen on"),
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
-    database_url: str | None = typer.Option(
+    database_url: Optional[str] = typer.Option(
         None,
         "--database-url",
         envvar="WHIRR_DATABASE_URL",
         help="PostgreSQL connection URL",
     ),
-    data_dir: Path | None = typer.Option(
+    data_dir: Optional[Path] = typer.Option(
         None,
         "--data-dir",
         "-d",

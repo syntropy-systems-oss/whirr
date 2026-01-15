@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Protocol, cast
+from typing import TYPE_CHECKING, Annotated, Optional, Protocol, cast
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -160,8 +160,8 @@ async def queue(request: Request) -> HTMLResponse:
 @app.get("/runs", response_class=HTMLResponse)
 async def runs_list(
     request: Request,
-    status: str | None = None,
-    tag: str | None = None,
+    status: Optional[str] = None,
+    tag: Optional[str] = None,
     limit: Annotated[int, Query(le=100)] = 20,
 ) -> HTMLResponse:
     """Render the runs history view."""

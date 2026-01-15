@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -32,12 +33,12 @@ def format_duration(seconds: float | None) -> str:
 
 
 def runs(
-    status: str | None = typer.Option(
+    status: Optional[str] = typer.Option(
         None,
         "--status", "-s",
         help="Filter by status (running, completed, failed)",
     ),
-    tag: str | None = typer.Option(
+    tag: Optional[str] = typer.Option(
         None,
         "--tag", "-t",
         help="Filter by tag",

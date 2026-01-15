@@ -10,7 +10,7 @@ import socket
 import time
 from pathlib import Path
 from threading import Event, Thread
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import typer
 from rich.console import Console
@@ -54,18 +54,18 @@ def _signal_handler(_signum: int, _frame: FrameType | None) -> None:
 
 
 def worker(
-    gpu: int | None = typer.Option(
+    gpu: Optional[int] = typer.Option(
         None,
         "--gpu", "-g",
         help="GPU index to use (for multi-GPU setups)",
     ),
-    server: str | None = typer.Option(
+    server: Optional[str] = typer.Option(
         None,
         "--server", "-s",
         envvar="WHIRR_SERVER_URL",
         help="Server URL for remote mode (e.g., http://head-node:8080)",
     ),
-    data_dir: Path | None = typer.Option(
+    data_dir: Optional[Path] = typer.Option(
         None,
         "--data-dir", "-d",
         envvar="WHIRR_DATA_DIR",

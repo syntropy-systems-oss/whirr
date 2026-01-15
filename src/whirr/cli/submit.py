@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -15,17 +16,17 @@ console = Console()
 
 def submit(
     ctx: typer.Context,
-    name: str | None = typer.Option(
+    name: Optional[str] = typer.Option(
         None,
         "--name", "-n",
         help="Name for the job",
     ),
-    tags: str | None = typer.Option(
+    tags: Optional[str] = typer.Option(
         None,
         "--tags", "-t",
         help="Comma-separated tags",
     ),
-    server: str | None = typer.Option(
+    server: Optional[str] = typer.Option(
         None,
         "--server", "-s",
         envvar="WHIRR_SERVER_URL",

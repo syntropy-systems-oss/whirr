@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -21,7 +22,7 @@ def sweep(
         help="Path to sweep configuration YAML file",
         exists=True,
     ),
-    prefix: str | None = typer.Option(
+    prefix: Optional[str] = typer.Option(
         None,
         "--prefix", "-p",
         help="Prefix for job names (overrides name in config)",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shlex
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import typer
 from rich.console import Console
@@ -71,7 +71,7 @@ def format_time_ago(timestamp: str | None) -> str:
 
 
 def status(
-    job_id: int | None = typer.Argument(
+    job_id: Optional[int] = typer.Argument(
         None,
         help="Job ID to show details for",
     ),

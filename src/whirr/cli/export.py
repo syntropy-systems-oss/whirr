@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 import typer
 from pydantic import TypeAdapter
@@ -37,9 +37,13 @@ def _to_csv_value(value: JSONValue | None) -> str | float | list[str] | None:
 
 def export(
     output: Path = typer.Argument(..., help="Output file path (.csv or .json)"),
-    run_id: str | None = typer.Option(None, "--run", "-r", help="Export specific run"),
-    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
-    tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
+    run_id: Optional[str] = typer.Option(
+        None, "--run", "-r", help="Export specific run"
+    ),
+    status: Optional[str] = typer.Option(
+        None, "--status", "-s", help="Filter by status"
+    ),
+    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Filter by tag"),
     include_metrics: bool = typer.Option(
         False, "--metrics", "-m", help="Include full metrics history (JSON only)"
     ),

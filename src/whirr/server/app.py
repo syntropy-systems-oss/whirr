@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, Annotated, cast
+from typing import TYPE_CHECKING, Annotated, Optional, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import Response
@@ -308,7 +308,7 @@ def create_app(  # noqa: C901, PLR0915
     def list_jobs(
         db: Annotated[Database, Depends(get_db)],
         status: Annotated[
-            str | None,
+            Optional[str],
             Query(
                 description="Filter: active, queued, running, completed, failed",
             ),
@@ -424,8 +424,8 @@ def create_app(  # noqa: C901, PLR0915
     @app.get("/api/v1/runs", response_model=RunListResponse)
     def list_runs(
         db: Annotated[Database, Depends(get_db)],
-        status: Annotated[str | None, Query()] = None,
-        tag: Annotated[str | None, Query()] = None,
+        status: Annotated[Optional[str], Query()] = None,
+        tag: Annotated[Optional[str], Query()] = None,
         limit: Annotated[int, Query(ge=1, le=500)] = 50,
     ) -> RunListResponse:
         """List runs with optional filtering."""
