@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, TypeAlias, cast
+from typing import TYPE_CHECKING, cast
 
 from pydantic import (
     Field,
@@ -14,7 +14,7 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
-from typing_extensions import override
+from typing_extensions import TypeAlias, override
 
 from .base import JSONValue, WhirrBaseModel
 

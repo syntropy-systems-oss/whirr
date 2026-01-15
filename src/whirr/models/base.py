@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, TypeAlias
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, JsonValue
+from typing_extensions import TypeAlias
 
 JSONPrimitive: TypeAlias = str | int | float | bool | None
 JSONValue: TypeAlias = JsonValue
