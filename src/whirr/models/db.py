@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Optional, cast
 
 from pydantic import Field, TypeAdapter, field_validator
 
@@ -17,26 +17,26 @@ class JobRecord(WhirrBaseModel):
     """Database job record."""
 
     id: int
-    name: str | None = None
+    name: Optional[str] = None
     command_argv: list[str] = Field(default_factory=list)
     workdir: str
-    config: RunConfig | None = None
+    config: Optional[RunConfig] = None
     status: str
-    tags: list[str] | None = None
+    tags: Optional[list[str]] = None
     attempt: int = 1
-    parent_job_id: int | None = None
-    created_at: str | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
-    worker_id: str | None = None
-    heartbeat_at: str | None = None
-    lease_expires_at: str | None = None
-    pid: int | None = None
-    pgid: int | None = None
-    exit_code: int | None = None
-    error_message: str | None = None
-    cancel_requested_at: str | None = None
-    run_id: str | None = None
+    parent_job_id: Optional[int] = None
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    worker_id: Optional[str] = None
+    heartbeat_at: Optional[str] = None
+    lease_expires_at: Optional[str] = None
+    pid: Optional[int] = None
+    pgid: Optional[int] = None
+    exit_code: Optional[int] = None
+    error_message: Optional[str] = None
+    cancel_requested_at: Optional[str] = None
+    run_id: Optional[str] = None
 
     @field_validator("command_argv", mode="before")
     @classmethod
@@ -49,7 +49,7 @@ class JobRecord(WhirrBaseModel):
 
     @field_validator("config", mode="before")
     @classmethod
-    def _parse_config(cls, value: object) -> RunConfig | None:
+    def _parse_config(cls, value: object) -> Optional[RunConfig]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -58,7 +58,7 @@ class JobRecord(WhirrBaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def _parse_tags(cls, value: object) -> list[str] | None:
+    def _parse_tags(cls, value: object) -> Optional[list[str]]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -70,23 +70,23 @@ class RunRecord(WhirrBaseModel):
     """Database run record."""
 
     id: str
-    job_id: int | None = None
-    name: str | None = None
-    config: RunConfig | None = None
-    tags: list[str] | None = None
+    job_id: Optional[int] = None
+    name: Optional[str] = None
+    config: Optional[RunConfig] = None
+    tags: Optional[list[str]] = None
     status: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_seconds: float | None = None
-    summary: RunSummary | None = None
-    git_hash: str | None = None
-    git_dirty: int | None = None
-    hostname: str | None = None
-    run_dir: str | None = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    summary: Optional[RunSummary] = None
+    git_hash: Optional[str] = None
+    git_dirty: Optional[int] = None
+    hostname: Optional[str] = None
+    run_dir: Optional[str] = None
 
     @field_validator("config", mode="before")
     @classmethod
-    def _parse_config(cls, value: object) -> RunConfig | None:
+    def _parse_config(cls, value: object) -> Optional[RunConfig]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -95,7 +95,7 @@ class RunRecord(WhirrBaseModel):
 
     @field_validator("tags", mode="before")
     @classmethod
-    def _parse_tags(cls, value: object) -> list[str] | None:
+    def _parse_tags(cls, value: object) -> Optional[list[str]]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -104,7 +104,7 @@ class RunRecord(WhirrBaseModel):
 
     @field_validator("summary", mode="before")
     @classmethod
-    def _parse_summary(cls, value: object) -> RunSummary | None:
+    def _parse_summary(cls, value: object) -> Optional[RunSummary]:
         if value is None:
             return None
         if isinstance(value, str):
@@ -116,12 +116,12 @@ class WorkerRecord(WhirrBaseModel):
     """Database worker record."""
 
     id: str
-    pid: int | None = None
-    hostname: str | None = None
-    gpu_index: int | None = None
-    gpu_id: int | None = None
+    pid: Optional[int] = None
+    hostname: Optional[str] = None
+    gpu_index: Optional[int] = None
+    gpu_id: Optional[int] = None
     status: str
-    current_job_id: int | None = None
-    started_at: str | None = None
-    last_heartbeat: str | None = None
-    heartbeat_at: str | None = None
+    current_job_id: Optional[int] = None
+    started_at: Optional[str] = None
+    last_heartbeat: Optional[str] = None
+    heartbeat_at: Optional[str] = None

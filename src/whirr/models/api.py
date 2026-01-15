@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import Field
 
 from .base import JSONValue, WhirrBaseModel
@@ -27,11 +29,11 @@ class WorkerResponse(WhirrBaseModel):
     """Worker information response."""
 
     id: str
-    hostname: str | None = None
-    gpu_id: int | None = None
+    hostname: Optional[str] = None
+    gpu_id: Optional[int] = None
     status: str
-    current_job_id: int | None = None
-    heartbeat_at: str | None = None
+    current_job_id: Optional[int] = None
+    heartbeat_at: Optional[str] = None
 
 
 class WorkerListResponse(WhirrBaseModel):
@@ -45,9 +47,9 @@ class JobCreate(WhirrBaseModel):
 
     command_argv: list[str]
     workdir: str
-    name: str | None = None
-    config: dict[str, JSONValue] | None = None
-    tags: list[str] | None = None
+    name: Optional[str] = None
+    config: Optional[dict[str, JSONValue]] = None
+    tags: Optional[list[str]] = None
 
 
 class JobCreateResponse(WhirrBaseModel):
@@ -63,7 +65,7 @@ class JobClaim(WhirrBaseModel):
     """Request to claim a job."""
 
     worker_id: str
-    gpu_id: int | None = None
+    gpu_id: Optional[int] = None
     lease_seconds: int = Field(default=60, ge=10, le=600)
 
 
@@ -79,8 +81,8 @@ class JobComplete(WhirrBaseModel):
 
     worker_id: str
     exit_code: int
-    run_id: str | None = None
-    error_message: str | None = None
+    run_id: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class JobFail(WhirrBaseModel):
@@ -94,25 +96,25 @@ class JobResponse(WhirrBaseModel):
     """Job information response."""
 
     id: int
-    name: str | None = None
+    name: Optional[str] = None
     command_argv: list[str]
     workdir: str
-    config: dict[str, JSONValue] | None = None
-    tags: list[str] | None = None
+    config: Optional[dict[str, JSONValue]] = None
+    tags: Optional[list[str]] = None
     status: str
     attempt: int = 1
-    worker_id: str | None = None
-    created_at: str | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
-    exit_code: int | None = None
-    run_id: str | None = None
+    worker_id: Optional[str] = None
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    exit_code: Optional[int] = None
+    run_id: Optional[str] = None
 
 
 class JobClaimResponse(WhirrBaseModel):
     """Response from claiming a job."""
 
-    job: JobResponse | None = None
+    job: Optional[JobResponse] = None
 
 
 class JobListResponse(WhirrBaseModel):
@@ -132,7 +134,7 @@ class HeartbeatResponse(WhirrBaseModel):
     """Response from job heartbeat."""
 
     success: bool
-    lease_expires_at: str | None = None
+    lease_expires_at: Optional[str] = None
     cancel_requested: bool = False
 
 
@@ -140,17 +142,17 @@ class RunResponse(WhirrBaseModel):
     """Run information response."""
 
     id: str
-    job_id: int | None = None
-    name: str | None = None
-    config: dict[str, JSONValue] | None = None
-    tags: list[str] | None = None
+    job_id: Optional[int] = None
+    name: Optional[str] = None
+    config: Optional[dict[str, JSONValue]] = None
+    tags: Optional[list[str]] = None
     status: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_seconds: float | None = None
-    summary: dict[str, JSONValue] | None = None
-    hostname: str | None = None
-    run_dir: str | None = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    summary: Optional[dict[str, JSONValue]] = None
+    hostname: Optional[str] = None
+    run_dir: Optional[str] = None
 
 
 class RunListResponse(WhirrBaseModel):
@@ -195,7 +197,7 @@ class ErrorResponse(WhirrBaseModel):
     """Error response."""
 
     detail: str
-    error_code: str | None = None
+    error_code: Optional[str] = None
 
 
 class HealthResponse(WhirrBaseModel):

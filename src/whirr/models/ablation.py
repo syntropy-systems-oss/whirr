@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Union, cast
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from pydantic import (
     Field,
@@ -41,9 +41,9 @@ class AblationRunResult(WhirrBaseModel):
     condition: str
     replicate: int
     seed: int
-    metric_value: float | None = None
+    metric_value: Optional[float] = None
     status: str = "queued"
-    outcome: str | None = None
+    outcome: Optional[str] = None
 
 
 class AblationSession(WhirrBaseModel):
@@ -59,7 +59,7 @@ class AblationSession(WhirrBaseModel):
     runs: list[AblationRunResult] = Field(default_factory=list)
     created_at: str = ""
 
-    _path: Path | None = PrivateAttr(default=None)
+    _path: Optional[Path] = PrivateAttr(default=None)
 
     @field_validator("baseline", mode="before")
     @classmethod

@@ -108,6 +108,8 @@ select = ["ALL"]
 ignore = [
     "COM812",  # conflicts with ruff format
     "ISC001",  # conflicts with ruff format
+    "UP007",  # keep Union for py3.9 compatibility
+    "UP045",  # keep Optional for py3.9 compatibility
 ]
 
 [tool.ruff.lint.flake8-copyright]

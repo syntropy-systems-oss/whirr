@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, Optional, Union, cast
 
 from pydantic import Field, model_serializer, model_validator
 from typing_extensions import override
@@ -42,7 +42,7 @@ class KeyValuePayload(WhirrBaseModel):
         """Return the mapping's keys view."""
         return self.values.keys()
 
-    def get(self, key: str, default: JSONValue | None = None) -> JSONValue | None:
+    def get(self, key: str, default: Optional[JSONValue] = None) -> Optional[JSONValue]:
         """Return a value by key or the provided default."""
         return self.values.get(key, default)
 
@@ -62,7 +62,7 @@ class GitInfo(WhirrBaseModel):
     short_hash: str
     branch: str
     dirty: bool
-    remote: str | None = None
+    remote: Optional[str] = None
 
 
 class RunMeta(WhirrBaseModel):
@@ -72,41 +72,41 @@ class RunMeta(WhirrBaseModel):
     name: str
     tags: list[str] = Field(default_factory=list)
     started_at: str
-    finished_at: str | None = None
+    finished_at: Optional[str] = None
     status: str
-    summary: RunSummary | None = None
+    summary: Optional[RunSummary] = None
     config_file: str
     metrics_file: str
     artifacts_dir: str
-    git: GitInfo | None = None
-    git_file: str | None = None
-    requirements_file: str | None = None
-    pip_packages_count: int | None = None
+    git: Optional[GitInfo] = None
+    git_file: Optional[str] = None
+    requirements_file: Optional[str] = None
+    pip_packages_count: Optional[int] = None
 
 
 class RunMetricRecord(ExtraAllowModel):
     """Metric record from metrics.jsonl."""
 
-    idx: int | None = Field(default=None, alias="_idx")
-    timestamp: str | None = Field(default=None, alias="_timestamp")
-    step: int | None = None
+    idx: Optional[int] = Field(default=None, alias="_idx")
+    timestamp: Optional[str] = Field(default=None, alias="_timestamp")
+    step: Optional[int] = None
 
     @override
     def model_dump(
         self,
         *,
         mode: str = "python",
-        include: IncEx | None = None,
-        exclude: IncEx | None = None,
-        context: object | None = None,
-        by_alias: bool | None = None,
+        include: Optional[IncEx] = None,
+        exclude: Optional[IncEx] = None,
+        context: Optional[object] = None,
+        by_alias: Optional[bool] = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
-        exclude_none: bool | None = None,
+        exclude_none: Optional[bool] = None,
         exclude_computed_fields: bool = False,
         round_trip: bool = False,
-        warnings: bool | Literal["none", "warn", "error"] = True,
-        fallback: Callable[[object], object] | None = None,
+        warnings: Union[bool, Literal["none", "warn", "error"]] = True,
+        fallback: Optional[Callable[[object], object]] = None,
         serialize_as_any: bool = False,
     ) -> dict[str, JSONValue]:
         if exclude_none is None:
@@ -135,13 +135,13 @@ class SystemMetricRecord(ExtraAllowModel):
     """Metric record from system.jsonl."""
 
     timestamp: str = Field(alias="_timestamp")
-    cpu_percent: float | None = None
-    memory_used_gb: float | None = None
-    memory_total_gb: float | None = None
-    gpu_util: float | None = None
-    gpu_mem_used_gb: float | None = None
-    gpu_mem_total_gb: float | None = None
-    gpu_name: str | None = None
+    cpu_percent: Optional[float] = None
+    memory_used_gb: Optional[float] = None
+    memory_total_gb: Optional[float] = None
+    gpu_util: Optional[float] = None
+    gpu_mem_used_gb: Optional[float] = None
+    gpu_mem_total_gb: Optional[float] = None
+    gpu_name: Optional[str] = None
 
 
 class ArtifactRecord(WhirrBaseModel):
