@@ -1,23 +1,30 @@
+# Copyright (c) Syntropy Systems
 """Integration tests for whirr - end-to-end workflows."""
 
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+import pytest
 
 from whirr.db import (
-    get_connection,
-    create_job,
     claim_job,
+    create_job,
+    get_connection,
 )
-from whirr.runner import JobRunner
+from whirr.models.run import RunMeta
 from whirr.run import Run, read_metrics
+from whirr.runner import JobRunner
+
+if TYPE_CHECKING:
+    from whirr.models.db import JobRecord
 
 
 class TestWorkerEndToEnd:
     """Test that jobs actually run through the worker system."""
 
-    def test_job_runs_and_produces_output(self, whirr_project):
+    def test_job_runs_and_produces_output(self, whirr_project: Path) -> None:
         """Test that a submitted job actually executes and produces output."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -35,19 +42,19 @@ class TestWorkerEndToEnd:
 
         # Claim the job (simulating worker)
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
 
         assert job is not None
-        assert job["id"] == job_id
+        assert job.id == job_id
 
         # Run the job using JobRunner
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
@@ -63,7 +70,7 @@ class TestWorkerEndToEnd:
         assert log_path.exists()
         assert "hello from job" in log_path.read_text()
 
-    def test_job_captures_stderr(self, whirr_project):
+    def test_job_captures_stderr(self, whirr_project: Path) -> None:
         """Test that stderr is captured in output.log."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -71,31 +78,32 @@ class TestWorkerEndToEnd:
         conn = get_connection(db_path)
         job_id = create_job(
             conn,
-            command_argv=[sys.executable, "-c", "import sys; sys.stderr.write('error output\\n')"],
+            command_argv=[sys.executable, "-c", "import sys; sys.stderr.write('error output\n')"],
             workdir=str(whirr_project),
             name="stderr-test",
         )
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
-        runner.wait()
+        _ = runner.wait()
 
         log_path = run_dir / "output.log"
         assert "error output" in log_path.read_text()
 
-    def test_job_nonzero_exit_code(self, whirr_project):
+    def test_job_nonzero_exit_code(self, whirr_project: Path) -> None:
         """Test that non-zero exit codes are captured."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -110,15 +118,16 @@ class TestWorkerEndToEnd:
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
@@ -130,7 +139,7 @@ class TestWorkerEndToEnd:
 class TestCancelRunningJob:
     """Test that cancellation actually kills running processes."""
 
-    def test_cancel_kills_running_process(self, whirr_project):
+    def test_cancel_kills_running_process(self, whirr_project: Path) -> None:
         """Test that cancelling a running job terminates the process."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -146,15 +155,16 @@ class TestCancelRunningJob:
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
@@ -171,7 +181,7 @@ class TestCancelRunningJob:
         # Exit code should indicate termination (negative on Unix = signal)
         assert exit_code != 0
 
-    def test_cancel_kills_entire_process_group(self, whirr_project):
+    def test_cancel_kills_entire_process_group(self, whirr_project: Path) -> None:
         """Test that cancel kills child processes too (process group)."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -187,7 +197,7 @@ import sys
 # Spawn a child that keeps writing
 child = subprocess.Popen([
     sys.executable, '-c',
-    "import time; f=open('{marker_file}', 'a'); [f.write(str(i)+'\\\\n') or f.flush() or time.sleep(0.1) for i in range(1000)]"
+    "import time; f=open('{marker_file}', 'a'); [f.write(str(i)+'\\\\\\\\n') or f.flush() or time.sleep(0.1) for i in range(1000)]"
 ])
 
 # Parent just waits
@@ -203,15 +213,16 @@ time.sleep(60)
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
@@ -221,10 +232,10 @@ time.sleep(60)
         assert marker_file.exists(), "Child process should have started writing"
 
         # Record current file size
-        marker_file.stat().st_size
+        _ = marker_file.stat().st_size
 
         # Kill the job
-        runner.kill(grace_period=1.0)
+        _ = runner.kill(grace_period=1.0)
 
         # Wait a bit and check file stopped growing (child is dead)
         time.sleep(0.5)
@@ -241,9 +252,10 @@ time.sleep(60)
 class TestDirectRun:
     """Test running whirr.init() directly without job queue."""
 
-    def test_direct_run_creates_files(self, whirr_project):
+    def test_direct_run_creates_files(self, whirr_project: Path) -> None:
         """Test that a direct run (no job) creates the expected files."""
         # Create a run directly
+        _ = whirr_project
         run = Run(name="direct-test", config={"lr": 0.01})
 
         # Log some metrics
@@ -262,49 +274,56 @@ class TestDirectRun:
         # Verify metrics
         metrics = read_metrics(run.run_dir / "metrics.jsonl")
         assert len(metrics) == 2
-        assert metrics[0]["loss"] == 1.0
-        assert metrics[1]["loss"] == 0.5
+        first = metrics[0].model_dump()
+        second = metrics[1].model_dump()
+        assert first["loss"] == 1.0
+        assert second["loss"] == 0.5
 
-    def test_direct_run_id_format(self, whirr_project):
+    def test_direct_run_id_format(self, whirr_project: Path) -> None:
         """Test that direct runs get local-* ID format."""
+        _ = whirr_project
         run = Run(name="id-test")
 
         assert run.run_id.startswith("local-")
 
         run.finish()
 
-    def test_direct_run_context_manager(self, whirr_project):
+    def test_direct_run_context_manager(self, whirr_project: Path) -> None:
         """Test direct run with context manager."""
+        _ = whirr_project
         with Run(name="context-test") as run:
             run.log({"value": 42})
 
         # Should be marked completed
-        import json
-        with open(run.run_dir / "meta.json") as f:
-            meta = json.load(f)
+        meta = RunMeta.model_validate_json((run.run_dir / "meta.json").read_text())
+        assert meta.status == "completed"
 
-        assert meta["status"] == "completed"
-
-    def test_direct_run_exception_marks_failed(self, whirr_project):
+    def test_direct_run_exception_marks_failed(self, whirr_project: Path) -> None:
         """Test that exceptions in context manager mark run as failed."""
-        try:
+        _ = whirr_project
+        run_holder: list[Run] = []
+
+        def run_and_fail() -> None:
             with Run(name="fail-test") as run:
+                run_holder.append(run)
                 run.log({"value": 1})
-                raise ValueError("intentional error")
-        except ValueError:
-            pass
+                msg = "intentional error"
+                if run_holder:
+                    raise ValueError(msg)
 
-        import json
-        with open(run.run_dir / "meta.json") as f:
-            meta = json.load(f)
+        with pytest.raises(ValueError, match="intentional error"):
+            run_and_fail()
 
-        assert meta["status"] == "failed"
+        assert run_holder
+        run_ref = run_holder[0]
+        meta = RunMeta.model_validate_json((run_ref.run_dir / "meta.json").read_text())
+        assert meta.status == "failed"
 
 
 class TestLogsFollow:
     """Test the logs --follow functionality."""
 
-    def test_logs_captures_live_output(self, whirr_project):
+    def test_logs_captures_live_output(self, whirr_project: Path) -> None:
         """Test that output.log captures output as it's written."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -327,15 +346,16 @@ for i in range(5):
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
@@ -351,7 +371,7 @@ for i in range(5):
         assert log_path.exists(), "Log file should be created"
 
         # Wait for job to complete
-        runner.wait()
+        _ = runner.wait()
 
         # Verify all output captured
         content = log_path.read_text()
@@ -362,7 +382,7 @@ for i in range(5):
 class TestWorkerWorkdir:
     """Test that jobs run in the correct working directory."""
 
-    def test_job_runs_in_specified_workdir(self, whirr_project):
+    def test_job_runs_in_specified_workdir(self, whirr_project: Path) -> None:
         """Test that job executes in the workdir specified."""
         db_path = whirr_project / ".whirr" / "whirr.db"
         runs_dir = whirr_project / ".whirr" / "runs"
@@ -385,19 +405,20 @@ class TestWorkerWorkdir:
         conn.close()
 
         conn = get_connection(db_path)
-        job = claim_job(conn, "test-worker")
+        job: JobRecord | None = claim_job(conn, "test-worker")
         conn.close()
+        assert job is not None
 
         run_dir = runs_dir / f"job-{job_id}"
         run_dir.mkdir(parents=True)
 
         runner = JobRunner(
-            command_argv=job["command_argv"],
-            workdir=Path(job["workdir"]),
+            command_argv=job.command_argv,
+            workdir=Path(job.workdir),
             run_dir=run_dir,
         )
         runner.start()
-        runner.wait()
+        _ = runner.wait()
 
         # Verify job ran in the correct directory
         # Use resolve() to handle macOS /var -> /private/var symlink

@@ -1,23 +1,42 @@
+# Copyright (c) Syntropy Systems
 """whirr ablate run command."""
 
-import json
-import os
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, TypedDict
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from whirr.ablate import FileValue, get_ablations_dir, load_session_by_name
+from whirr.ablate import get_ablations_dir, load_session_by_name
 from whirr.ablate.models import AblationRunResult
 from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import create_job, get_connection
+from whirr.models.ablation import AblationSession, ConfigValue, FileValue
+from whirr.models.run import RunConfig
+
+if TYPE_CHECKING:
+    from whirr.models.base import JSONValue
 
 console = Console()
 
 
-def resolve_config_value(value: Any) -> Any:
+class AblationJob(TypedDict):
+    """Generated job payload for ablation runs."""
+
+    command: list[str]
+    name: str
+    tags: list[str]
+    config: dict[str, JSONValue]
+    condition: str
+    replicate: int
+    seed: int
+    cfg_path: str
+
+
+def resolve_config_value(value: ConfigValue) -> JSONValue:
     """Resolve a config value, extracting text from FileValue."""
     if isinstance(value, FileValue):
         return value.text
@@ -29,11 +48,11 @@ def generate_config(
     condition: str,
     replicate: int,
     seed: int,
-    baseline: Dict[str, Any],
-    delta: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    baseline: dict[str, ConfigValue],
+    delta: dict[str, ConfigValue] | None,
+) -> dict[str, JSONValue]:
     """Generate a config dict for a specific condition/replicate."""
-    config = {
+    config: dict[str, JSONValue] = {
         "__ablate__": {
             "session_id": session_id,
             "condition": condition,
@@ -54,20 +73,20 @@ def generate_config(
     return config
 
 
-def substitute_templates(argv: List[str], seed: int, cfg_path: str) -> List[str]:
+def substitute_templates(argv: list[str], seed: int, cfg_path: str) -> list[str]:
     """Replace {{seed}} and {{cfg_path}} in command argv."""
-    result = []
+    result: list[str] = []
     for arg in argv:
-        arg = arg.replace("{{seed}}", str(seed))
-        arg = arg.replace("{{cfg_path}}", cfg_path)
-        result.append(arg)
+        rendered = arg.replace("{{seed}}", str(seed))
+        rendered = rendered.replace("{{cfg_path}}", cfg_path)
+        result.append(rendered)
     return result
 
 
 def run(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Session name"),
-    replicates: Optional[int] = typer.Option(
+    replicates: int | None = typer.Option(
         None,
         "--replicates",
         "-r",
@@ -79,7 +98,7 @@ def run(
         "-n",
         help="Preview jobs without submitting",
     ),
-    server: Optional[str] = typer.Option(
+    server: str | None = typer.Option(
         None,
         "--server",
         "-s",
@@ -87,8 +106,7 @@ def run(
         help="Server URL for remote submission",
     ),
 ) -> None:
-    """
-    Run all conditions with paired seeds.
+    """Run all conditions with paired seeds.
 
     Use -- to separate options from the command template:
 
@@ -106,27 +124,31 @@ def run(
         console.print(
             "\nUsage: whirr ablate run SESSION [OPTIONS] -- COMMAND [ARGS]..."
         )
-        console.print(
-            "\nExample: whirr ablate run study -- python eval.py --seed {{seed}} --cfg {{cfg_path}}"
-        )
+        example_prefix = "\nExample: whirr ablate run study -- python eval.py"
+        example_suffix = "--seed {{seed}} --cfg {{cfg_path}}"
+        console.print(f"{example_prefix} {example_suffix}")
         raise typer.Exit(1)
 
     try:
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     try:
         session = load_session_by_name(name, whirr_dir)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] Session '{name}' not found")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not session.deltas:
-        console.print(
-            f"[red]Error:[/red] No deltas added. Use 'whirr ablate add {name} key=value'"
+        message = " ".join(
+            [
+                "[red]Error:[/red] No deltas added.",
+                f"Use 'whirr ablate add {name} key=value'",
+            ]
         )
+        console.print(message)
         raise typer.Exit(1)
 
     # Use provided replicates or session default
@@ -138,7 +160,7 @@ def run(
 
     # Generate jobs for all conditions
     conditions = session.get_condition_names()
-    jobs_to_submit = []
+    jobs_to_submit: list[AblationJob] = []
 
     for replicate_idx in range(num_replicates):
         seed = session.get_seed(replicate_idx)
@@ -162,8 +184,9 @@ def run(
             cfg_path = configs_dir / cfg_filename
 
             if not dry_run:
-                with open(cfg_path, "w") as f:
-                    json.dump(config, f, indent=2)
+                _ = cfg_path.write_text(
+                    RunConfig.model_validate(config).model_dump_json(indent=2)
+                )
 
             # Build command with template substitution
             job_command = substitute_templates(command_argv, seed, str(cfg_path))
@@ -176,7 +199,7 @@ def run(
             ]
 
             # Build job config for tracking
-            job_config = {
+            job_config: dict[str, JSONValue] = {
                 "ablation_session": session.name,
                 "ablation_session_id": session.session_id,
                 "condition": condition,
@@ -224,7 +247,7 @@ def run(
         return
 
     # Submit jobs
-    workdir = os.getcwd()
+    workdir = str(Path.cwd())
 
     if server:
         _submit_remote(server, jobs_to_submit, workdir, session)
@@ -232,13 +255,18 @@ def run(
         _submit_local(whirr_dir, jobs_to_submit, workdir, session)
 
 
-def _submit_local(whirr_dir: Path, jobs_to_submit: List[Dict], workdir: str, session) -> None:
+def _submit_local(
+    whirr_dir: Path,
+    jobs_to_submit: list[AblationJob],
+    workdir: str,
+    session: AblationSession,
+) -> None:
     """Submit jobs to local queue."""
     db_path = get_db_path(whirr_dir)
     conn = get_connection(db_path)
 
     try:
-        submitted_ids = []
+        submitted_ids: list[int] = []
         for job in jobs_to_submit:
             job_id = create_job(
                 conn,
@@ -274,21 +302,23 @@ def _submit_local(whirr_dir: Path, jobs_to_submit: List[Dict], workdir: str, ses
 
 
 def _submit_remote(
-    server_url: str, jobs_to_submit: List[Dict], workdir: str, session
+    server_url: str,
+    jobs_to_submit: list[AblationJob],
+    workdir: str,
+    session: AblationSession,
 ) -> None:
     """Submit jobs to remote server."""
     try:
-        from whirr.client import WhirrClient
-    except ImportError:
-        console.print(
-            "[red]Error:[/red] httpx is required for remote submission. "
-            "Install with: pip install whirr[server]"
-        )
-        raise typer.Exit(1)
+        from whirr.client import WhirrClient, WhirrClientError
+    except ImportError as e:
+        error_message = "[red]Error:[/red] httpx is required for remote submission."
+        install_message = "Install with: pip install whirr[server]"
+        console.print(f"{error_message} {install_message}")
+        raise typer.Exit(1) from e
 
     client = WhirrClient(server_url)
     try:
-        submitted_ids = []
+        submitted_ids: list[int] = []
         for job in jobs_to_submit:
             result = client.submit_job(
                 command_argv=job["command"],
@@ -297,12 +327,12 @@ def _submit_remote(
                 config=job["config"],
                 tags=job["tags"],
             )
-            job_id = result["job_id"]
+            job_id = result.job_id
             submitted_ids.append(job_id)
 
             session.runs.append(
                 AblationRunResult(
-                    run_id=result.get("run_id", f"job-{job_id}"),
+                    run_id=result.run_id,
                     job_id=job_id,
                     condition=job["condition"],
                     replicate=job["replicate"],
@@ -317,8 +347,8 @@ def _submit_remote(
         console.print(f"  [dim]Job IDs:[/dim] {submitted_ids[0]}-{submitted_ids[-1]}")
         console.print(f"\nRank: [cyan]whirr ablate rank {session.name}[/cyan]")
 
-    except Exception as e:
+    except WhirrClientError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     finally:
         client.close()

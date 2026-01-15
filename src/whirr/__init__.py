@@ -1,5 +1,5 @@
-"""
-whirr - Local experiment orchestration.
+# Copyright (c) Syntropy Systems
+"""whirr - Local experiment orchestration.
 
 Queue jobs, track metrics, wake up to results.
 """

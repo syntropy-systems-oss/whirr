@@ -1,8 +1,10 @@
+# Copyright (c) Syntropy Systems
 """Configuration management for whirr."""
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import cast
 
 import yaml
 
@@ -24,9 +26,8 @@ class WhirrConfig:
     poll_interval: int = 5
 
 
-def find_whirr_dir(start_path: Optional[Path] = None) -> Optional[Path]:
-    """
-    Find the nearest .whirr directory by walking up from start_path.
+def find_whirr_dir(start_path: Path | None = None) -> Path | None:
+    """Find the nearest .whirr directory by walking up from start_path.
 
     Returns None if no .whirr directory is found.
     """
@@ -54,9 +55,8 @@ def get_global_config_dir() -> Path:
     return Path.home() / ".whirr"
 
 
-def load_config(whirr_dir: Optional[Path] = None) -> WhirrConfig:
-    """
-    Load configuration from .whirr/config.yaml or defaults.
+def load_config(whirr_dir: Path | None = None) -> WhirrConfig:
+    """Load configuration from .whirr/config.yaml or defaults.
 
     Looks for config in:
     1. Provided whirr_dir
@@ -81,42 +81,48 @@ def load_config(whirr_dir: Optional[Path] = None) -> WhirrConfig:
                 config_path = global_config
 
     if config_path is not None and config_path.exists():
-        with open(config_path) as f:
-            data = yaml.safe_load(f) or {}
+        with config_path.open() as f:
+            data = cast("dict[str, object]", yaml.safe_load(f) or {})
 
-        if "heartbeat_interval" in data:
-            config.heartbeat_interval = data["heartbeat_interval"]
-        if "heartbeat_timeout" in data:
-            config.heartbeat_timeout = data["heartbeat_timeout"]
-        if "kill_grace_period" in data:
-            config.kill_grace_period = data["kill_grace_period"]
-        if "poll_interval" in data:
-            config.poll_interval = data["poll_interval"]
+        heartbeat_interval = data.get("heartbeat_interval")
+        if isinstance(heartbeat_interval, (int, float)):
+            config.heartbeat_interval = int(heartbeat_interval)
+        heartbeat_timeout = data.get("heartbeat_timeout")
+        if isinstance(heartbeat_timeout, (int, float)):
+            config.heartbeat_timeout = int(heartbeat_timeout)
+        kill_grace_period = data.get("kill_grace_period")
+        if isinstance(kill_grace_period, (int, float)):
+            config.kill_grace_period = int(kill_grace_period)
+        poll_interval = data.get("poll_interval")
+        if isinstance(poll_interval, (int, float)):
+            config.poll_interval = int(poll_interval)
 
     return config
 
 
-def get_db_path(whirr_dir: Optional[Path] = None) -> Path:
+def get_db_path(whirr_dir: Path | None = None) -> Path:
     """Get the path to the SQLite database."""
     if whirr_dir is None:
         whirr_dir = find_whirr_dir()
 
     if whirr_dir is None:
+        msg = "No .whirr directory found. Run 'whirr init' first."
         raise RuntimeError(
-            "No .whirr directory found. Run 'whirr init' first."
+            msg
         )
 
     return whirr_dir / "whirr.db"
 
 
-def get_runs_dir(whirr_dir: Optional[Path] = None) -> Path:
+def get_runs_dir(whirr_dir: Path | None = None) -> Path:
     """Get the path to the runs directory."""
     if whirr_dir is None:
         whirr_dir = find_whirr_dir()
 
     if whirr_dir is None:
+        msg = "No .whirr directory found. Run 'whirr init' first."
         raise RuntimeError(
-            "No .whirr directory found. Run 'whirr init' first."
+            msg
         )
 
     return whirr_dir / "runs"
@@ -126,7 +132,8 @@ def require_whirr_dir() -> Path:
     """Get whirr directory or raise an error if not found."""
     whirr_dir = find_whirr_dir()
     if whirr_dir is None:
+        msg = "No .whirr directory found. Run 'whirr init' first."
         raise RuntimeError(
-            "No .whirr directory found. Run 'whirr init' first."
+            msg
         )
     return whirr_dir

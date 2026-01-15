@@ -1,9 +1,10 @@
+# Copyright (c) Syntropy Systems
 """whirr status command."""
+from __future__ import annotations
 
-import json
 import shlex
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
@@ -12,10 +13,13 @@ from rich.table import Table
 from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import get_active_jobs, get_connection, get_job
 
+if TYPE_CHECKING:
+    from whirr.models.db import JobRecord
+
 console = Console()
 
 
-def format_duration(started_at: Optional[str], finished_at: Optional[str] = None) -> str:
+def format_duration(started_at: str | None, finished_at: str | None = None) -> str:
     """Format duration from started_at to now or finished_at."""
     if not started_at:
         return "-"
@@ -25,25 +29,23 @@ def format_duration(started_at: Optional[str], finished_at: Optional[str] = None
         end = datetime.now(timezone.utc)
         if finished_at:
             end = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
-
         delta = end - start
         total_seconds = int(delta.total_seconds())
-
+    except (TypeError, ValueError):
+        return "-"
+    else:
         if total_seconds < 60:
             return f"{total_seconds}s"
-        elif total_seconds < 3600:
+        if total_seconds < 3600:
             minutes = total_seconds // 60
             seconds = total_seconds % 60
             return f"{minutes}m {seconds}s"
-        else:
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            return f"{hours}h {minutes}m"
-    except Exception:
-        return "-"
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        return f"{hours}h {minutes}m"
 
 
-def format_time_ago(timestamp: Optional[str]) -> str:
+def format_time_ago(timestamp: str | None) -> str:
     """Format a timestamp as time ago."""
     if not timestamp:
         return "-"
@@ -53,30 +55,28 @@ def format_time_ago(timestamp: Optional[str]) -> str:
         now = datetime.now(timezone.utc)
         delta = now - ts
         total_seconds = int(delta.total_seconds())
-
+    except (TypeError, ValueError):
+        return "-"
+    else:
         if total_seconds < 60:
             return "just now"
-        elif total_seconds < 3600:
+        if total_seconds < 3600:
             minutes = total_seconds // 60
             return f"{minutes}m ago"
-        elif total_seconds < 86400:
+        if total_seconds < 86400:
             hours = total_seconds // 3600
             return f"{hours}h ago"
-        else:
-            days = total_seconds // 86400
-            return f"{days}d ago"
-    except Exception:
-        return "-"
+        days = total_seconds // 86400
+        return f"{days}d ago"
 
 
 def status(
-    job_id: Optional[int] = typer.Argument(
+    job_id: int | None = typer.Argument(
         None,
         help="Job ID to show details for",
     ),
 ) -> None:
-    """
-    Show queue status.
+    """Show queue status.
 
     Without arguments, shows all active jobs (queued and running).
     With a job ID, shows detailed information about that job.
@@ -85,7 +85,7 @@ def status(
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     db_path = get_db_path(whirr_dir)
     conn = get_connection(db_path)
@@ -107,7 +107,7 @@ def status(
         conn.close()
 
 
-def _show_job_table(jobs: list[dict]) -> None:
+def _show_job_table(jobs: list[JobRecord]) -> None:
     """Display jobs in a table."""
     if not jobs:
         console.print("[dim]No active jobs[/dim]")
@@ -127,20 +127,20 @@ def _show_job_table(jobs: list[dict]) -> None:
             "completed": "green",
             "failed": "red",
             "cancelled": "dim",
-        }.get(job["status"], "white")
+        }.get(job.status, "white")
 
         table.add_row(
-            str(job["id"]),
-            job["name"] or f"job-{job['id']}",
-            f"[{status_style}]{job['status']}[/{status_style}]",
-            format_duration(job["started_at"]),
-            format_time_ago(job["created_at"]),
+            str(job.id),
+            job.name or f"job-{job.id}",
+            f"[{status_style}]{job.status}[/{status_style}]",
+            format_duration(job.started_at),
+            format_time_ago(job.created_at),
         )
 
     console.print(table)
 
 
-def _show_job_details(job: dict) -> None:
+def _show_job_details(job: JobRecord) -> None:
     """Display detailed job information."""
     status_style = {
         "queued": "yellow",
@@ -148,43 +148,41 @@ def _show_job_details(job: dict) -> None:
         "completed": "green",
         "failed": "red",
         "cancelled": "dim",
-    }.get(job["status"], "white")
+    }.get(job.status, "white")
 
     # Parse command_argv from JSON if needed
-    command_argv = job.get("command_argv")
-    if isinstance(command_argv, str):
-        command_argv = json.loads(command_argv)
+    command_argv = job.command_argv
     command_display = shlex.join(command_argv) if command_argv else "-"
 
-    console.print(f"\n[bold]Job #{job['id']}[/bold]")
-    console.print(f"  [dim]name:[/dim] {job['name'] or '-'}")
-    console.print(f"  [dim]status:[/dim] [{status_style}]{job['status']}[/{status_style}]")
+    console.print(f"\n[bold]Job #{job.id}[/bold]")
+    console.print(f"  [dim]name:[/dim] {job.name or '-'}")
+    console.print(f"  [dim]status:[/dim] [{status_style}]{job.status}[/{status_style}]")
     console.print(f"  [dim]command:[/dim] {command_display}")
-    if job.get("workdir"):
-        console.print(f"  [dim]workdir:[/dim] {job['workdir']}")
+    if job.workdir:
+        console.print(f"  [dim]workdir:[/dim] {job.workdir}")
 
-    if job["tags"]:
-        tags = json.loads(job["tags"]) if isinstance(job["tags"], str) else job["tags"]
-        console.print(f"  [dim]tags:[/dim] {', '.join(tags)}")
+    if job.tags:
+        console.print(f"  [dim]tags:[/dim] {', '.join(job.tags)}")
 
     console.print()
-    console.print(f"  [dim]created:[/dim] {format_time_ago(job['created_at'])}")
+    console.print(f"  [dim]created:[/dim] {format_time_ago(job.created_at)}")
 
-    if job["started_at"]:
-        console.print(f"  [dim]started:[/dim] {format_time_ago(job['started_at'])}")
-        console.print(f"  [dim]runtime:[/dim] {format_duration(job['started_at'], job['finished_at'])}")
+    if job.started_at:
+        console.print(f"  [dim]started:[/dim] {format_time_ago(job.started_at)}")
+        runtime = format_duration(job.started_at, job.finished_at)
+        console.print(f"  [dim]runtime:[/dim] {runtime}")
 
-    if job["finished_at"]:
-        console.print(f"  [dim]finished:[/dim] {format_time_ago(job['finished_at'])}")
+    if job.finished_at:
+        console.print(f"  [dim]finished:[/dim] {format_time_ago(job.finished_at)}")
 
-    if job["worker_id"]:
-        console.print(f"  [dim]worker:[/dim] {job['worker_id']}")
+    if job.worker_id:
+        console.print(f"  [dim]worker:[/dim] {job.worker_id}")
 
-    if job["exit_code"] is not None:
-        console.print(f"  [dim]exit_code:[/dim] {job['exit_code']}")
+    if job.exit_code is not None:
+        console.print(f"  [dim]exit_code:[/dim] {job.exit_code}")
 
-    if job["error_message"]:
-        console.print(f"  [dim]error:[/dim] {job['error_message']}")
+    if job.error_message:
+        console.print(f"  [dim]error:[/dim] {job.error_message}")
 
-    if job["run_id"]:
-        console.print(f"  [dim]run_id:[/dim] {job['run_id']}")
+    if job.run_id:
+        console.print(f"  [dim]run_id:[/dim] {job.run_id}")

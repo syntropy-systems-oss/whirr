@@ -1,8 +1,11 @@
+# Copyright (c) Syntropy Systems
 """whirr ablate rank command."""
+from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, TypedDict
 
 import typer
 from rich.console import Console
@@ -11,16 +14,31 @@ from rich.table import Table
 from whirr.ablate import load_session_by_name
 from whirr.config import get_db_path, get_runs_dir, require_whirr_dir
 from whirr.db import get_connection, get_run
+from whirr.models.base import JSONValue
 from whirr.run import read_meta, read_metrics
+
+if TYPE_CHECKING:
+    from whirr.models.db import RunRecord
 
 console = Console()
 
+SummaryValues = Mapping[str, JSONValue]
+
+
+class DeltaEffect(TypedDict):
+    """Summary of delta effects on the metric."""
+
+    name: str
+    mean: float
+    effect: float
+    n: int
+    values: list[float]
+
 
 def extract_metric(
-    run_dir: Optional[Path], metric_name: str, summary: Optional[dict]
-) -> Optional[float]:
-    """
-    Extract metric value from run.
+    run_dir: Path | None, metric_name: str, summary: SummaryValues | None
+) -> float | None:
+    """Extract metric value from run.
 
     Priority:
     1. summary[metric_name] if present
@@ -39,8 +57,9 @@ def extract_metric(
             metrics = read_metrics(metrics_path)
             # Find last occurrence of metric
             for m in reversed(metrics):
-                if metric_name in m:
-                    value = m[metric_name]
+                record = m.model_dump()
+                if metric_name in record:
+                    value = record[metric_name]
                     if isinstance(value, (int, float)):
                         return float(value)
 
@@ -56,26 +75,26 @@ def rank(
         help="Show detailed per-replicate results",
     ),
 ) -> None:
-    """
-    Rank deltas by their effect on the target metric.
+    """Rank deltas by their effect on the target metric.
 
     Shows which delta has the strongest effect on the metric.
     Deltas are ranked by absolute effect (strongest first).
 
     Example:
         whirr ablate rank weird-behavior
+
     """
     try:
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     try:
         session = load_session_by_name(name, whirr_dir)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] Session '{name}' not found")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not session.runs:
         console.print(
@@ -89,17 +108,17 @@ def rank(
     conn = get_connection(db_path)
 
     try:
-        metrics_by_condition: Dict[str, List[float]] = defaultdict(list)
+        metrics_by_condition: defaultdict[str, list[float]] = defaultdict(list)
         pending_count = 0
         failed_count = 0
         no_metric_count = 0
 
         for run_result in session.runs:
             # Get run from database
-            db_run = get_run(conn, run_result.run_id)
+            db_run: RunRecord | None = get_run(conn, run_result.run_id)
 
-            run_dir = None
-            summary = None
+            run_dir: Path | None = None
+            summary: SummaryValues | None = None
 
             if db_run is None:
                 # Try to find by job_id pattern
@@ -108,14 +127,14 @@ def rank(
                     pending_count += 1
                     continue
                 meta = read_meta(run_dir)
-                if meta:
-                    summary = meta.get("summary", {})
+                if meta and meta.summary:
+                    summary = meta.summary.values
             else:
-                status = db_run.get("status")
+                status = db_run.status
                 if status == "running":
                     pending_count += 1
                     continue
-                elif status == "failed":
+                if status == "failed":
                     failed_count += 1
                     run_result.status = "failed"
                     continue
@@ -123,27 +142,18 @@ def rank(
                 run_result.status = status or "completed"
 
                 # Get run directory and summary
-                if db_run.get("run_dir"):
-                    run_dir = Path(db_run["run_dir"])
+                if db_run.run_dir:
+                    run_dir = Path(db_run.run_dir)
 
                 # Try to get summary from db first
-                if db_run.get("summary"):
-                    import json
-
-                    try:
-                        summary = (
-                            json.loads(db_run["summary"])
-                            if isinstance(db_run["summary"], str)
-                            else db_run["summary"]
-                        )
-                    except (json.JSONDecodeError, TypeError):
-                        summary = None
+                if db_run.summary:
+                    summary = db_run.summary.values
 
                 # Fallback to meta.json
                 if summary is None and run_dir:
                     meta = read_meta(run_dir)
-                    if meta:
-                        summary = meta.get("summary", {})
+                    if meta and meta.summary:
+                        summary = meta.summary.values
 
             # Extract target metric
             value = extract_metric(run_dir, session.metric, summary)
@@ -172,8 +182,8 @@ def rank(
     baseline_mean = sum(baseline_values) / len(baseline_values)
 
     # Compute delta effects
-    delta_effects = []
-    for delta_name in session.deltas.keys():
+    delta_effects: list[DeltaEffect] = []
+    for delta_name in session.deltas:
         if delta_name not in metrics_by_condition:
             continue
 
@@ -201,7 +211,7 @@ def rank(
         raise typer.Exit(1)
 
     # Sort by absolute effect (strongest first)
-    delta_effects.sort(key=lambda x: abs(x["effect"]), reverse=True)
+    delta_effects.sort(key=lambda item: abs(item["effect"]), reverse=True)
 
     # Display results
     console.print(f"\n[bold]Ablation Results: {session.name}[/bold]")

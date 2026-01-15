@@ -25,7 +25,7 @@
     </div>
     <div class="text-right text-[10px] text-zinc-600">
         <div>{{ run.started_at|format_time_ago }}</div>
-        <div>{{ run.get('duration_s')|format_duration }}</div>
+        <div>{{ run.duration_seconds|format_duration }}</div>
     </div>
 </div>
 

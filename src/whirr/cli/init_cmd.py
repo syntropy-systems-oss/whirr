@@ -1,3 +1,4 @@
+# Copyright (c) Syntropy Systems
 """whirr init command."""
 
 from pathlib import Path
@@ -13,12 +14,11 @@ console = Console()
 
 def init(
     path: Path = typer.Argument(
-        Path("."),
+        Path(),
         help="Directory to initialize (default: current directory)",
     ),
 ) -> None:
-    """
-    Initialize a new whirr project.
+    """Initialize a new whirr project.
 
     Creates a .whirr directory with configuration and database.
     """
@@ -43,7 +43,7 @@ def init(
     }
 
     config_path = whirr_dir / "config.yaml"
-    with open(config_path, "w") as f:
+    with config_path.open("w") as f:
         yaml.dump(config, f, default_flow_style=False)
 
     # Initialize database

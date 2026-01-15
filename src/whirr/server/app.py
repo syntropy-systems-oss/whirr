@@ -1,87 +1,165 @@
+# Copyright (c) Syntropy Systems
 """FastAPI application for the whirr server."""
 
-import json
+# pyright: reportUnusedFunction=false
+from __future__ import annotations
+
+import logging
 import mimetypes
 import os
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
 from time import sleep
-from typing import Optional
+from typing import TYPE_CHECKING, Annotated, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import Response
 
-from ..db import Database, PostgresDatabase, SQLiteDatabase
-from .models import (
+from whirr.db import Database, PostgresDatabase, SQLiteDatabase
+from whirr.models.api import (
+    HealthResponse,
     HeartbeatResponse,
+    JobCancelResponse,
     JobClaim,
     JobClaimResponse,
     JobComplete,
     JobCreate,
+    JobCreateResponse,
     JobFail,
     JobHeartbeat,
+    JobListResponse,
     JobResponse,
     MessageResponse,
+    RunArtifactsResponse,
+    RunListResponse,
+    RunMetricsResponse,
     RunResponse,
     StatusResponse,
+    WorkerListResponse,
     WorkerRegistration,
+    WorkerResponse,
     WorkerUnregister,
 )
+from whirr.models.run import ArtifactRecord
+from whirr.run import read_metrics
 
-# Global database instance
-_db: Optional[Database] = None
-_lease_monitor_thread: Optional[Thread] = None
-_shutdown_flag = False
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from whirr.models.db import JobRecord, RunRecord, WorkerRecord
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ServerState:
+    db: Database | None = None
+    lease_monitor_thread: Thread | None = None
+    shutdown_flag: bool = False
+
+
+_state = _ServerState()
 
 
 def get_db() -> Database:
     """Get the database instance."""
-    if _db is None:
-        raise RuntimeError("Database not initialized")
-    return _db
+    if _state.db is None:
+        msg = "Database not initialized"
+        raise RuntimeError(msg)
+    return _state.db
+
+
+def _job_to_response(job: JobRecord) -> JobResponse:
+    return JobResponse(
+        id=job.id,
+        name=job.name,
+        command_argv=job.command_argv,
+        workdir=job.workdir,
+        config=job.config.values if job.config else None,
+        tags=job.tags,
+        status=job.status,
+        attempt=job.attempt,
+        worker_id=job.worker_id,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        exit_code=job.exit_code,
+        run_id=job.run_id,
+    )
+
+
+def _run_to_response(run: RunRecord) -> RunResponse:
+    return RunResponse(
+        id=run.id,
+        job_id=run.job_id,
+        name=run.name,
+        config=run.config.values if run.config else None,
+        tags=run.tags,
+        status=run.status,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        duration_seconds=run.duration_seconds,
+        summary=run.summary.values if run.summary else None,
+        hostname=run.hostname,
+        run_dir=run.run_dir,
+    )
+
+
+def _worker_to_response(worker: WorkerRecord) -> WorkerResponse:
+    return WorkerResponse(
+        id=worker.id,
+        hostname=worker.hostname,
+        gpu_id=worker.gpu_id,
+        status=worker.status,
+        current_job_id=worker.current_job_id,
+        heartbeat_at=worker.heartbeat_at,
+    )
+
+
+def _get_data_dir(app: FastAPI) -> Path:
+    return cast("Path", app.state.data_dir)
 
 
 def _lease_monitor_loop(db: Database, interval: int = 30) -> None:
     """Background thread to check for expired leases and requeue jobs."""
-    global _shutdown_flag
-    while not _shutdown_flag:
+    while not _state.shutdown_flag:
         try:
-            expired = db.requeue_expired_jobs()
-            if expired:
-                print(f"[lease-monitor] Requeued {len(expired)} jobs with expired leases")
-        except Exception as e:
-            print(f"[lease-monitor] Error: {e}")
+            _ = db.requeue_expired_jobs()
+        except Exception as exc:
+            logger.exception("Lease monitor error", exc_info=exc)
         sleep(interval)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Lifecycle manager for the FastAPI app."""
-    global _lease_monitor_thread, _shutdown_flag
-
     # Start lease monitor thread
-    _shutdown_flag = False
-    if _db is not None:
-        _lease_monitor_thread = Thread(target=_lease_monitor_loop, args=(_db,), daemon=True)
-        _lease_monitor_thread.start()
+    _state.shutdown_flag = False
+    if _state.db is not None:
+        _state.lease_monitor_thread = Thread(
+            target=_lease_monitor_loop,
+            args=(_state.db,),
+            daemon=True,
+        )
+        _state.lease_monitor_thread.start()
 
     yield
 
     # Shutdown
-    _shutdown_flag = True
-    if _lease_monitor_thread is not None:
-        _lease_monitor_thread.join(timeout=5)
+    _state.shutdown_flag = True
+    if _state.lease_monitor_thread is not None:
+        _state.lease_monitor_thread.join(timeout=5)
 
 
-def create_app(
-    database_url: Optional[str] = None,
-    db_path: Optional[Path] = None,
-    data_dir: Optional[Path] = None,
+def create_app(  # noqa: C901, PLR0915
+    database_url: str | None = None,
+    db_path: Path | None = None,
+    data_dir: Path | None = None,
 ) -> FastAPI:
-    """
-    Create the FastAPI application.
+    """Create the FastAPI application.
 
     Args:
         database_url: PostgreSQL connection URL (preferred for production)
@@ -90,24 +168,25 @@ def create_app(
 
     Returns:
         Configured FastAPI application
-    """
-    global _db
 
+    """
     # Initialize database
     if database_url:
-        _db = PostgresDatabase(database_url)
+        _state.db = PostgresDatabase(database_url)
     elif db_path:
-        _db = SQLiteDatabase(db_path)
+        _state.db = SQLiteDatabase(db_path)
     else:
         # Try environment variable
         env_url = os.environ.get("WHIRR_DATABASE_URL")
         if env_url:
-            _db = PostgresDatabase(env_url)
+            _state.db = PostgresDatabase(env_url)
         else:
-            raise ValueError("No database configuration provided")
+            msg = "No database configuration provided"
+            raise ValueError(msg)
 
     # Initialize schema
-    _db.init_schema()
+    db = _state.db
+    db.init_schema()
 
     # Store data_dir for reference
     app_data_dir = data_dir or Path(os.environ.get("WHIRR_DATA_DIR", "."))
@@ -125,7 +204,10 @@ def create_app(
     # --- Worker Endpoints ---
 
     @app.post("/api/v1/workers/register", response_model=MessageResponse)
-    def register_worker(request: WorkerRegistration, db: Database = Depends(get_db)):
+    def register_worker(
+        request: WorkerRegistration,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> MessageResponse:
         """Register a worker with the server."""
         # Register each GPU as a separate worker if multiple GPUs
         if request.gpu_ids:
@@ -149,21 +231,29 @@ def create_app(
         return MessageResponse(message=f"Worker {request.worker_id} registered")
 
     @app.post("/api/v1/workers/unregister", response_model=MessageResponse)
-    def unregister_worker(request: WorkerUnregister, db: Database = Depends(get_db)):
+    def unregister_worker(
+        request: WorkerUnregister,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> MessageResponse:
         """Unregister a worker from the server."""
         db.unregister_worker(request.worker_id)
         return MessageResponse(message=f"Worker {request.worker_id} unregistered")
 
-    @app.get("/api/v1/workers", response_model=dict)
-    def list_workers(db: Database = Depends(get_db)):
+    @app.get("/api/v1/workers", response_model=WorkerListResponse)
+    def list_workers(
+        db: Annotated[Database, Depends(get_db)],
+    ) -> WorkerListResponse:
         """Get all registered workers."""
         workers = db.get_workers()
-        return {"workers": workers}
+        return WorkerListResponse(workers=[_worker_to_response(w) for w in workers])
 
     # --- Job Endpoints ---
 
-    @app.post("/api/v1/jobs", response_model=dict)
-    def create_job(request: JobCreate, db: Database = Depends(get_db)):
+    @app.post("/api/v1/jobs", response_model=JobCreateResponse)
+    def create_job(
+        request: JobCreate,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> JobCreateResponse:
         """Submit a new job to the queue.
 
         Returns job_id, run_id (reserved immediately), and run_dir path.
@@ -177,16 +267,20 @@ def create_app(
         )
         # Reserve run_id immediately so callers know where results will be
         run_id = f"job-{job_id}"
-        run_dir = str(app.state.data_dir / "runs" / run_id)
-        return {
-            "job_id": job_id,
-            "run_id": run_id,
-            "run_dir": run_dir,
-            "message": f"Job {job_id} created",
-        }
+        data_dir = _get_data_dir(app)
+        run_dir = str(data_dir / "runs" / run_id)
+        return JobCreateResponse(
+            job_id=job_id,
+            run_id=run_id,
+            run_dir=run_dir,
+            message=f"Job {job_id} created",
+        )
 
     @app.post("/api/v1/jobs/claim", response_model=JobClaimResponse)
-    def claim_job(request: JobClaim, db: Database = Depends(get_db)):
+    def claim_job(
+        request: JobClaim,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> JobClaimResponse:
         """Claim the next available job."""
         job = db.claim_job(
             worker_id=request.worker_id,
@@ -196,62 +290,44 @@ def create_app(
         if job is None:
             return JobClaimResponse(job=None)
 
-        return JobClaimResponse(
-            job=JobResponse(
-                id=job["id"],
-                name=job.get("name"),
-                command_argv=job["command_argv"],
-                workdir=job["workdir"],
-                config=job.get("config"),
-                tags=job.get("tags"),
-                status="running",
-                attempt=job.get("attempt", 1),
-                worker_id=request.worker_id,
-            )
-        )
+        return JobClaimResponse(job=_job_to_response(job))
 
     @app.get("/api/v1/jobs/{job_id}", response_model=JobResponse)
-    def get_job(job_id: int, db: Database = Depends(get_db)):
+    def get_job(
+        job_id: int,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> JobResponse:
         """Get job details."""
         job = db.get_job(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        return JobResponse(
-            id=job["id"],
-            name=job.get("name"),
-            command_argv=job.get("command_argv", []),
-            workdir=job.get("workdir", ""),
-            config=job.get("config"),
-            tags=job.get("tags"),
-            status=job.get("status", "unknown"),
-            attempt=job.get("attempt", 1),
-            worker_id=job.get("worker_id"),
-            created_at=job.get("created_at"),
-            started_at=job.get("started_at"),
-            finished_at=job.get("finished_at"),
-            exit_code=job.get("exit_code"),
-            run_id=job.get("run_id"),
-        )
+        return _job_to_response(job)
 
-    @app.get("/api/v1/jobs", response_model=dict)
+    @app.get("/api/v1/jobs", response_model=JobListResponse)
     def list_jobs(
-        status: Optional[str] = Query(None, description="Filter: active, queued, running, completed, failed"),
-        limit: int = Query(50, ge=1, le=500),
-        db: Database = Depends(get_db),
-    ):
+        db: Annotated[Database, Depends(get_db)],
+        status: Annotated[
+            str | None,
+            Query(
+                description="Filter: active, queued, running, completed, failed",
+            ),
+        ] = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    ) -> JobListResponse:
         """List jobs with optional filtering."""
-        if status == "active":
-            jobs = db.get_active_jobs()
-        else:
-            # For now, just return active jobs
-            # TODO: Add more filtering options
-            jobs = db.get_active_jobs()
+        jobs = db.get_active_jobs()
+        if status:
+            jobs = [job for job in jobs if job.status == status]
 
-        return {"jobs": jobs[:limit]}
+        return JobListResponse(jobs=[_job_to_response(job) for job in jobs[:limit]])
 
     @app.post("/api/v1/jobs/{job_id}/heartbeat", response_model=HeartbeatResponse)
-    def job_heartbeat(job_id: int, request: JobHeartbeat, db: Database = Depends(get_db)):
+    def job_heartbeat(
+        job_id: int,
+        request: JobHeartbeat,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> HeartbeatResponse:
         """Renew the lease for a job."""
         success = db.renew_lease(
             job_id=job_id,
@@ -260,9 +336,12 @@ def create_app(
         )
 
         if not success:
+            detail = (
+                f"Job {job_id} not found or not owned by worker {request.worker_id}"
+            )
             raise HTTPException(
                 status_code=404,
-                detail=f"Job {job_id} not found or not owned by worker {request.worker_id}",
+                detail=detail,
             )
 
         # Check if cancellation was requested
@@ -274,13 +353,17 @@ def create_app(
         )
 
     @app.post("/api/v1/jobs/{job_id}/complete", response_model=MessageResponse)
-    def complete_job(job_id: int, request: JobComplete, db: Database = Depends(get_db)):
+    def complete_job(
+        job_id: int,
+        request: JobComplete,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> MessageResponse:
         """Mark a job as completed."""
         job = db.get_job(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        if job.get("worker_id") != request.worker_id:
+        if job.worker_id != request.worker_id:
             raise HTTPException(
                 status_code=403,
                 detail=f"Job {job_id} is not owned by worker {request.worker_id}",
@@ -297,13 +380,17 @@ def create_app(
         return MessageResponse(message=f"Job {job_id} marked as {status}")
 
     @app.post("/api/v1/jobs/{job_id}/fail", response_model=MessageResponse)
-    def fail_job(job_id: int, request: JobFail, db: Database = Depends(get_db)):
+    def fail_job(
+        job_id: int,
+        request: JobFail,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> MessageResponse:
         """Mark a job as failed."""
         job = db.get_job(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        if job.get("worker_id") != request.worker_id:
+        if job.worker_id != request.worker_id:
             raise HTTPException(
                 status_code=403,
                 detail=f"Job {job_id} is not owned by worker {request.worker_id}",
@@ -317,52 +404,51 @@ def create_app(
 
         return MessageResponse(message=f"Job {job_id} marked as failed")
 
-    @app.post("/api/v1/jobs/{job_id}/cancel", response_model=dict)
-    def cancel_job(job_id: int, db: Database = Depends(get_db)):
+    @app.post("/api/v1/jobs/{job_id}/cancel", response_model=JobCancelResponse)
+    def cancel_job(
+        job_id: int,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> JobCancelResponse:
         """Cancel a job."""
         try:
             old_status = db.cancel_job(job_id)
-            return {"message": f"Job {job_id} cancelled", "previous_status": old_status}
+            return JobCancelResponse(
+                message=f"Job {job_id} cancelled",
+                previous_status=old_status,
+            )
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # --- Run Endpoints ---
 
-    @app.get("/api/v1/runs", response_model=dict)
+    @app.get("/api/v1/runs", response_model=RunListResponse)
     def list_runs(
-        status: Optional[str] = Query(None),
-        tag: Optional[str] = Query(None),
-        limit: int = Query(50, ge=1, le=500),
-        db: Database = Depends(get_db),
-    ):
+        db: Annotated[Database, Depends(get_db)],
+        status: Annotated[str | None, Query()] = None,
+        tag: Annotated[str | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    ) -> RunListResponse:
         """List runs with optional filtering."""
         runs = db.get_runs(status=status, tag=tag, limit=limit)
-        return {"runs": runs}
+        return RunListResponse(runs=[_run_to_response(run) for run in runs])
 
     @app.get("/api/v1/runs/{run_id}", response_model=RunResponse)
-    def get_run(run_id: str, db: Database = Depends(get_db)):
+    def get_run(
+        run_id: str,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> RunResponse:
         """Get run details."""
         run = db.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
-        return RunResponse(
-            id=run["id"],
-            job_id=run.get("job_id"),
-            name=run.get("name"),
-            config=run.get("config"),
-            tags=run.get("tags"),
-            status=run.get("status", "unknown"),
-            started_at=run.get("started_at"),
-            finished_at=run.get("finished_at"),
-            duration_seconds=run.get("duration_seconds"),
-            summary=run.get("summary"),
-            hostname=run.get("hostname"),
-            run_dir=run.get("run_dir"),
-        )
+        return _run_to_response(run)
 
-    @app.get("/api/v1/runs/{run_id}/metrics", response_model=dict)
-    def get_run_metrics(run_id: str, db: Database = Depends(get_db)):
+    @app.get("/api/v1/runs/{run_id}/metrics", response_model=RunMetricsResponse)
+    def get_run_metrics(
+        run_id: str,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> RunMetricsResponse:
         """Get metrics for a run.
 
         Returns the contents of the run's metrics.jsonl file as a list of records.
@@ -373,38 +459,32 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
         # Find metrics file
-        run_dir = run.get("run_dir")
+        run_dir = run.run_dir
         if run_dir:
             metrics_path = Path(run_dir) / "metrics.jsonl"
         else:
             # Fallback to data_dir/runs/{run_id}/metrics.jsonl
-            metrics_path = app.state.data_dir / "runs" / run_id / "metrics.jsonl"
+            data_dir = _get_data_dir(app)
+            metrics_path = data_dir / "runs" / run_id / "metrics.jsonl"
 
         if not metrics_path.exists():
-            return {"metrics": [], "count": 0}
+            return RunMetricsResponse(metrics=[], count=0)
 
-        # Parse JSONL file
-        metrics = []
         try:
-            with open(metrics_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            metrics.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            # Skip malformed lines (e.g., partial writes from crash)
-                            continue
+            metrics = read_metrics(metrics_path)
         except OSError as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Error reading metrics file: {e}",
-            )
+            ) from e
 
-        return {"metrics": metrics, "count": len(metrics)}
+        return RunMetricsResponse(metrics=metrics, count=len(metrics))
 
-    @app.get("/api/v1/runs/{run_id}/artifacts", response_model=dict)
-    def list_run_artifacts(run_id: str, db: Database = Depends(get_db)):
+    @app.get("/api/v1/runs/{run_id}/artifacts", response_model=RunArtifactsResponse)
+    def list_run_artifacts(
+        run_id: str,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> RunArtifactsResponse:
         """List all artifacts for a run.
 
         Returns files in the run directory with name, size, and modified time.
@@ -415,41 +495,48 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
         # Find run directory
-        run_dir = run.get("run_dir")
+        run_dir = run.run_dir
         if run_dir:
             run_path = Path(run_dir)
         else:
-            run_path = app.state.data_dir / "runs" / run_id
+            data_dir = _get_data_dir(app)
+            run_path = data_dir / "runs" / run_id
 
         if not run_path.exists():
-            return {"artifacts": [], "count": 0}
+            return RunArtifactsResponse(artifacts=[], count=0)
 
         # List all files recursively
-        artifacts = []
+        artifacts: list[ArtifactRecord] = []
         try:
             for file_path in run_path.rglob("*"):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(run_path)
                     stat = file_path.stat()
-                    artifacts.append({
-                        "path": str(rel_path),
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(
-                            stat.st_mtime, tz=timezone.utc
-                        ).isoformat(),
-                    })
+                    artifacts.append(
+                        ArtifactRecord(
+                            path=str(rel_path),
+                            size=stat.st_size,
+                            modified=datetime.fromtimestamp(
+                                stat.st_mtime, tz=timezone.utc
+                            ).isoformat(),
+                        )
+                    )
         except OSError as e:
             raise HTTPException(
                 status_code=500,
                 detail=f"Error listing artifacts: {e}",
-            )
+            ) from e
 
         # Sort by path for consistent ordering
-        artifacts.sort(key=lambda x: x["path"])
-        return {"artifacts": artifacts, "count": len(artifacts)}
+        artifacts.sort(key=lambda x: x.path)
+        return RunArtifactsResponse(artifacts=artifacts, count=len(artifacts))
 
     @app.get("/api/v1/runs/{run_id}/artifacts/{artifact_path:path}")
-    def get_run_artifact(run_id: str, artifact_path: str, db: Database = Depends(get_db)):
+    def get_run_artifact(
+        run_id: str,
+        artifact_path: str,
+        db: Annotated[Database, Depends(get_db)],
+    ) -> Response:
         """Download an artifact file from a run.
 
         Returns the raw file content with appropriate content-type.
@@ -460,23 +547,24 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
         # Find run directory
-        run_dir = run.get("run_dir")
+        run_dir = run.run_dir
         if run_dir:
             run_path = Path(run_dir)
         else:
-            run_path = app.state.data_dir / "runs" / run_id
+            data_dir = _get_data_dir(app)
+            run_path = data_dir / "runs" / run_id
 
         # Resolve the artifact path safely
         file_path = (run_path / artifact_path).resolve()
 
         # Security: ensure the path is within the run directory
         try:
-            file_path.relative_to(run_path.resolve())
-        except ValueError:
+            _ = file_path.relative_to(run_path.resolve())
+        except ValueError as e:
             raise HTTPException(
                 status_code=403,
                 detail="Access denied: path traversal not allowed",
-            )
+            ) from e
 
         if not file_path.exists():
             raise HTTPException(
@@ -497,7 +585,7 @@ def create_app(
             raise HTTPException(
                 status_code=500,
                 detail=f"Error reading artifact: {e}",
-            )
+            ) from e
 
         # Guess content type
         content_type, _ = mimetypes.guess_type(str(file_path))
@@ -515,20 +603,20 @@ def create_app(
     # --- Status Endpoints ---
 
     @app.get("/api/v1/status", response_model=StatusResponse)
-    def get_status(db: Database = Depends(get_db)):
+    def get_status(db: Annotated[Database, Depends(get_db)]) -> StatusResponse:
         """Get server status and statistics."""
         active_jobs = db.get_active_jobs()
         workers = db.get_workers()
 
-        queued = sum(1 for j in active_jobs if j.get("status") == "queued")
-        running = sum(1 for j in active_jobs if j.get("status") == "running")
+        queued = sum(1 for j in active_jobs if j.status == "queued")
+        running = sum(1 for j in active_jobs if j.status == "running")
 
         # Get recent completed/failed (last 100)
         recent_runs = db.get_runs(limit=100)
-        completed = sum(1 for r in recent_runs if r.get("status") == "completed")
-        failed = sum(1 for r in recent_runs if r.get("status") == "failed")
+        completed = sum(1 for r in recent_runs if r.status == "completed")
+        failed = sum(1 for r in recent_runs if r.status == "failed")
 
-        workers_online = sum(1 for w in workers if w.get("status") in ("idle", "busy"))
+        workers_online = sum(1 for w in workers if w.status in ("idle", "busy"))
         workers_total = len(workers)
 
         return StatusResponse(
@@ -540,9 +628,9 @@ def create_app(
             workers_total=workers_total,
         )
 
-    @app.get("/health")
-    def health_check():
+    @app.get("/health", response_model=HealthResponse)
+    def health_check() -> HealthResponse:
         """Health check endpoint."""
-        return {"status": "healthy"}
+        return HealthResponse(status="healthy")
 
     return app

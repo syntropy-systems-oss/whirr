@@ -1,8 +1,8 @@
+# Copyright (c) Syntropy Systems
 """whirr sweep command."""
+from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -21,7 +21,7 @@ def sweep(
         help="Path to sweep configuration YAML file",
         exists=True,
     ),
-    prefix: Optional[str] = typer.Option(
+    prefix: str | None = typer.Option(
         None,
         "--prefix", "-p",
         help="Prefix for job names (overrides name in config)",
@@ -32,8 +32,7 @@ def sweep(
         help="Preview jobs without submitting",
     ),
 ) -> None:
-    """
-    Generate and submit jobs from a sweep configuration.
+    r"""Generate and submit jobs from a sweep configuration.
 
     Example sweep.yaml:
 
@@ -51,21 +50,21 @@ def sweep(
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # Load sweep config
     try:
         sweep_config = SweepConfig.from_yaml(config_file)
-    except Exception as e:
+    except (OSError, ValueError) as e:
         console.print(f"[red]Error loading config:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # Generate jobs
     try:
         jobs = generate_sweep_jobs(sweep_config, prefix)
-    except Exception as e:
+    except ValueError as e:
         console.print(f"[red]Error generating jobs:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not jobs:
         console.print("[yellow]No jobs generated from sweep config[/yellow]")
@@ -102,11 +101,11 @@ def sweep(
 
     # Submit jobs
     db_path = get_db_path(whirr_dir)
-    workdir = os.getcwd()
+    workdir = str(Path.cwd())
 
     conn = get_connection(db_path)
     try:
-        submitted_ids = []
+        submitted_ids: list[int] = []
         for job in jobs:
             job_id = create_job(
                 conn,

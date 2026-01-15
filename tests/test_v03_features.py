@@ -1,25 +1,41 @@
+# Copyright (c) Syntropy Systems
 """Tests for v0.3 features: dashboard, compare, export, git capture, pip freeze."""
 
 import json
 import os
 import re
+from collections.abc import Callable, Generator
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from whirr import run as run_module
 from whirr.cli.main import app
-
-
 from whirr.db import init_db
-from whirr.run import Run, _capture_git_info, _capture_pip_freeze
+from whirr.models.run import GitInfo, RunMeta
+from whirr.run import Run
+
+if TYPE_CHECKING:
+    from whirr.models.base import JSONObject
+
+_capture_git_info = cast(
+    "Callable[[], GitInfo | None]",
+    getattr(run_module, "_capture_git_info"),  # noqa: B009
+)
+_capture_pip_freeze = cast(
+    "Callable[[], list[str] | None]",
+    getattr(run_module, "_capture_pip_freeze"),  # noqa: B009
+)
 
 
 def strip_ansi(text: str) -> str:
     """Strip ANSI escape codes from text."""
-    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 @pytest.fixture
-def whirr_dir(tmp_path):
+def whirr_dir(tmp_path: Path) -> Generator[Path, None, None]:
     """Create a whirr project directory."""
     whirr_path = tmp_path / ".whirr"
     whirr_path.mkdir()
@@ -29,7 +45,7 @@ def whirr_dir(tmp_path):
     init_db(db_path)
 
     # Change to tmp_path so whirr can find .whirr
-    old_cwd = os.getcwd()
+    old_cwd = Path.cwd()
     os.chdir(tmp_path)
     yield tmp_path
     os.chdir(old_cwd)
@@ -38,22 +54,21 @@ def whirr_dir(tmp_path):
 class TestGitCapture:
     """Tests for git info capture."""
 
-    def test_capture_git_info_in_repo(self):
+    def test_capture_git_info_in_repo(self) -> None:
         """Test git capture returns info when in a git repo."""
         # This test runs in the whirr repo itself
         git_info = _capture_git_info()
 
         # We're running in the whirr repo, so this should work
         if git_info:
-            assert "commit" in git_info
-            assert "short_hash" in git_info
-            assert "branch" in git_info
-            assert "dirty" in git_info
-            assert isinstance(git_info["dirty"], bool)
+            assert git_info.commit
+            assert git_info.short_hash
+            assert git_info.branch
+            assert isinstance(git_info.dirty, bool)
 
-    def test_capture_git_info_not_in_repo(self, tmp_path):
+    def test_capture_git_info_not_in_repo(self, tmp_path: Path) -> None:
         """Test git capture returns None when not in a git repo."""
-        old_cwd = os.getcwd()
+        old_cwd = Path.cwd()
         os.chdir(tmp_path)
         try:
             git_info = _capture_git_info()
@@ -65,7 +80,7 @@ class TestGitCapture:
 class TestPipCapture:
     """Tests for pip freeze capture."""
 
-    def test_capture_pip_freeze(self):
+    def test_capture_pip_freeze(self) -> None:
         """Test pip freeze capture returns list or None."""
         packages = _capture_pip_freeze()
         # May return None if pip isn't available in this env
@@ -75,8 +90,9 @@ class TestPipCapture:
 class TestRunWithCapture:
     """Tests for Run class with git/pip capture."""
 
-    def test_run_captures_git_info(self, whirr_dir):
+    def test_run_captures_git_info(self, whirr_dir: Path) -> None:
         """Test that Run captures git info when capture_git=True."""
+        _ = whirr_dir
         run = Run(
             name="test-git",
             config={"lr": 0.01},
@@ -89,14 +105,14 @@ class TestRunWithCapture:
         git_path = run.run_dir / "git.json"
         if run.git_info:
             assert git_path.exists()
-            with open(git_path) as f:
-                data = json.load(f)
-            assert "commit" in data
+            data = GitInfo.model_validate_json(git_path.read_text())
+            assert data.commit
 
         run.finish()
 
-    def test_run_skips_git_capture(self, whirr_dir):
+    def test_run_skips_git_capture(self, whirr_dir: Path) -> None:
         """Test that Run skips git capture when capture_git=False."""
+        _ = whirr_dir
         run = Run(
             name="test-no-git",
             config={},
@@ -110,8 +126,9 @@ class TestRunWithCapture:
 
         run.finish()
 
-    def test_run_captures_pip_freeze(self, whirr_dir):
+    def test_run_captures_pip_freeze(self, whirr_dir: Path) -> None:
         """Test that Run creates requirements.txt when capture_pip=True."""
+        _ = whirr_dir
         run = Run(
             name="test-pip",
             config={},
@@ -127,8 +144,9 @@ class TestRunWithCapture:
 
         run.finish()
 
-    def test_meta_includes_git_info(self, whirr_dir):
+    def test_meta_includes_git_info(self, whirr_dir: Path) -> None:
         """Test that meta.json includes git info when captured."""
+        _ = whirr_dir
         run = Run(
             name="test-meta-git",
             config={},
@@ -138,12 +156,11 @@ class TestRunWithCapture:
         )
 
         meta_path = run.run_dir / "meta.json"
-        with open(meta_path) as f:
-            meta = json.load(f)
+        meta = RunMeta.model_validate_json(meta_path.read_text())
 
         if run.git_info:
-            assert "git" in meta
-            assert "git_file" in meta
+            assert meta.git is not None
+            assert meta.git_file is not None
 
         run.finish()
 
@@ -151,7 +168,7 @@ class TestRunWithCapture:
 class TestCompareCommand:
     """Tests for whirr compare command."""
 
-    def test_compare_help(self):
+    def test_compare_help(self) -> None:
         """Test compare --help works."""
         from typer.testing import CliRunner
 
@@ -160,10 +177,11 @@ class TestCompareCommand:
         assert result.exit_code == 0
         assert "Compare multiple runs" in result.stdout
 
-    def test_compare_needs_two_runs(self, whirr_dir):
+    def test_compare_needs_two_runs(self, whirr_dir: Path) -> None:
         """Test compare requires at least 2 runs."""
         from typer.testing import CliRunner
 
+        _ = whirr_dir
         runner = CliRunner()
         result = runner.invoke(app, ["compare", "abc123"])
         assert result.exit_code == 1
@@ -173,7 +191,7 @@ class TestCompareCommand:
 class TestExportCommand:
     """Tests for whirr export command."""
 
-    def test_export_help(self):
+    def test_export_help(self) -> None:
         """Test export --help works."""
         from typer.testing import CliRunner
 
@@ -182,25 +200,27 @@ class TestExportCommand:
         assert result.exit_code == 0
         assert "Export runs" in result.stdout
 
-    def test_export_requires_valid_extension(self, whirr_dir):
+    def test_export_requires_valid_extension(self, whirr_dir: Path) -> None:
         """Test export requires .csv or .json extension."""
         from typer.testing import CliRunner
 
+        _ = whirr_dir
         runner = CliRunner()
         result = runner.invoke(app, ["export", "output.txt"])
         assert result.exit_code == 1
         assert ".csv or .json" in result.stdout
 
-    def test_export_json_empty(self, whirr_dir):
+    def test_export_json_empty(self, whirr_dir: Path) -> None:
         """Test export to JSON with no runs."""
         from typer.testing import CliRunner
 
+        _ = whirr_dir
         runner = CliRunner()
         result = runner.invoke(app, ["export", "runs.json"])
         assert result.exit_code == 0
         assert "No runs to export" in result.stdout
 
-    def test_export_json_with_runs(self, whirr_dir):
+    def test_export_json_with_runs(self, whirr_dir: Path) -> None:
         """Test export to JSON with runs."""
         from typer.testing import CliRunner
 
@@ -223,12 +243,11 @@ class TestExportCommand:
         assert "Exported 1 run" in result.stdout
 
         # Verify JSON content
-        with open(output_path) as f:
-            data = json.load(f)
+        data = cast("list[JSONObject]", json.loads(output_path.read_text()))
         assert len(data) == 1
         assert data[0]["name"] == "export-test"
 
-    def test_export_csv_with_runs(self, whirr_dir):
+    def test_export_csv_with_runs(self, whirr_dir: Path) -> None:
         """Test export to CSV with runs."""
         from typer.testing import CliRunner
 
@@ -258,7 +277,7 @@ class TestExportCommand:
 class TestDashboardCommand:
     """Tests for whirr dashboard command."""
 
-    def test_dashboard_help(self):
+    def test_dashboard_help(self) -> None:
         """Test dashboard --help works."""
         from typer.testing import CliRunner
 
@@ -269,7 +288,7 @@ class TestDashboardCommand:
         assert "whirr dashboard" in output
         assert "--port" in output
 
-    def test_dashboard_module_imports(self):
+    def test_dashboard_module_imports(self) -> None:
         """Test dashboard module can be imported."""
         from whirr.dashboard import app as dashboard_app
 
@@ -279,11 +298,13 @@ class TestDashboardCommand:
 class TestDashboardServer:
     """Tests for dashboard FastAPI server."""
 
-    def test_dashboard_routes_exist(self):
+    def test_dashboard_routes_exist(self) -> None:
         """Test that expected routes are registered."""
+        from fastapi.routing import APIRoute
+
         from whirr.dashboard import app as dashboard_app
 
-        routes = [r.path for r in dashboard_app.routes]
+        routes = [route.path for route in dashboard_app.routes if isinstance(route, APIRoute)]
         assert "/" in routes
         assert "/queue" in routes
         assert "/runs" in routes

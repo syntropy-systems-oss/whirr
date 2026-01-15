@@ -1,3 +1,4 @@
+# Copyright (c) Syntropy Systems
 """Main CLI entry point for whirr."""
 
 import typer
@@ -21,30 +22,33 @@ from whirr.cli.worker import worker
 
 app = typer.Typer(
     name="whirr",
-    help="Local experiment orchestration. Queue jobs, track metrics, wake up to results.",
+    help=(
+        "Local experiment orchestration. Queue jobs, track metrics, "
+        "wake up to results."
+    ),
     no_args_is_help=True,
     add_completion=False,
 )
 
 # Register commands
-app.command()(init)
-app.command(
+_ = app.command()(init)
+_ = app.command(
     context_settings={"allow_extra_args": True, "allow_interspersed_args": False}
 )(submit)
-app.command()(status)
-app.command()(worker)
-app.command()(logs)
-app.command()(cancel)
-app.command()(retry)
-app.command()(sweep)
-app.command()(watch)
-app.command()(runs)
-app.command()(show)
-app.command()(doctor)
-app.command()(dashboard)
-app.command()(compare)
-app.command(name="export")(export)
-app.command()(server)
+_ = app.command()(status)
+_ = app.command()(worker)
+_ = app.command()(logs)
+_ = app.command()(cancel)
+_ = app.command()(retry)
+_ = app.command()(sweep)
+_ = app.command()(watch)
+_ = app.command()(runs)
+_ = app.command()(show)
+_ = app.command()(doctor)
+_ = app.command()(dashboard)
+_ = app.command()(compare)
+_ = app.command(name="export")(export)
+_ = app.command()(server)
 
 # Register ablate sub-app
 app.add_typer(ablate_app, name="ablate")

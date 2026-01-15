@@ -1,12 +1,31 @@
+# Copyright (c) Syntropy Systems
 """Sweep configuration and job generation."""
+from __future__ import annotations
 
 import itertools
+import math
 import random
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import TYPE_CHECKING, Optional, TypedDict, cast
 
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from whirr.models.base import JSONValue
+
+SCI_NOTATION_THRESHOLD = 1e-4
+
+
+class SweepParamSpec(TypedDict, total=False):
+    """Parameter specification for sweeps."""
+
+    values: list[JSONValue]
+    distribution: str
+    min: float
+    max: float
 
 
 @dataclass
@@ -14,28 +33,30 @@ class SweepConfig:
     """Configuration for a parameter sweep."""
 
     program: str
-    parameters: dict[str, dict[str, Any]]
+    parameters: dict[str, SweepParamSpec]
     method: str = "grid"  # grid, random
-    name: Optional[str] = None
-    max_runs: Optional[int] = None  # For random sweeps
+    name: str | None = None
+    max_runs: int | None = None  # For random sweeps
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "SweepConfig":
+    def from_yaml(cls, path: Path) -> SweepConfig:
         """Load sweep configuration from YAML file."""
-        with open(path) as f:
-            data = yaml.safe_load(f)
+        with path.open() as f:
+            data = cast("dict[str, object]", yaml.safe_load(f))
 
         if "program" not in data:
-            raise ValueError("Sweep config must have 'program' field")
+            msg = "Sweep config must have 'program' field"
+            raise ValueError(msg)
         if "parameters" not in data:
-            raise ValueError("Sweep config must have 'parameters' field")
+            msg = "Sweep config must have 'parameters' field"
+            raise ValueError(msg)
 
         return cls(
-            program=data["program"],
-            parameters=data["parameters"],
-            method=data.get("method", "grid"),
-            name=data.get("name"),
-            max_runs=data.get("max_runs"),
+            program=cast("str", data["program"]),
+            parameters=cast("dict[str, SweepParamSpec]", data["parameters"]),
+            method=cast("str", data.get("method", "grid")),
+            name=cast("Optional[str]", data.get("name")),
+            max_runs=cast("Optional[int]", data.get("max_runs")),
         )
 
 
@@ -46,22 +67,24 @@ class SweepJob:
     command: list[str]
     name: str
     tags: list[str]
-    config: dict[str, Any]
+    config: dict[str, JSONValue]
 
 
-def generate_grid_combinations(parameters: dict[str, dict]) -> Iterator[dict[str, Any]]:
-    """
-    Generate all combinations for a grid sweep.
+def generate_grid_combinations(
+    parameters: dict[str, SweepParamSpec],
+) -> Iterator[dict[str, JSONValue]]:
+    """Generate all combinations for a grid sweep.
 
     Each parameter should have a 'values' key with a list of values.
     """
     # Extract parameter names and their values
-    param_names = []
-    param_values = []
+    param_names: list[str] = []
+    param_values: list[list[JSONValue]] = []
 
     for name, spec in parameters.items():
         if "values" not in spec:
-            raise ValueError(f"Parameter '{name}' must have 'values' for grid sweep")
+            msg = f"Parameter '{name}' must have 'values' for grid sweep"
+            raise ValueError(msg)
         param_names.append(name)
         param_values.append(spec["values"])
 
@@ -71,50 +94,51 @@ def generate_grid_combinations(parameters: dict[str, dict]) -> Iterator[dict[str
 
 
 def generate_random_combinations(
-    parameters: dict[str, dict],
+    parameters: dict[str, SweepParamSpec],
     max_runs: int,
-    seed: Optional[int] = None,
-) -> Iterator[dict[str, Any]]:
-    """
-    Generate random parameter combinations.
+    seed: int | None = None,
+) -> Iterator[dict[str, JSONValue]]:
+    """Generate random parameter combinations.
 
     Supports:
     - values: list of discrete values
     - distribution: 'uniform', 'log_uniform', 'int_uniform'
     - min/max: range for distributions
     """
-    if seed is not None:
-        random.seed(seed)
+    rng = random.Random(seed)  # noqa: S311
 
     for _ in range(max_runs):
-        config = {}
+        config: dict[str, JSONValue] = {}
         for name, spec in parameters.items():
             if "values" in spec:
-                config[name] = random.choice(spec["values"])
+                config[name] = rng.choice(spec["values"])
             elif "distribution" in spec:
                 dist = spec["distribution"]
-                min_val = spec.get("min", 0)
-                max_val = spec.get("max", 1)
+                min_val = float(spec.get("min", 0.0))
+                max_val = float(spec.get("max", 1.0))
 
                 if dist == "uniform":
-                    config[name] = random.uniform(min_val, max_val)
+                    config[name] = rng.uniform(min_val, max_val)
                 elif dist == "log_uniform":
-                    import math
                     log_min = math.log(min_val)
                     log_max = math.log(max_val)
-                    config[name] = math.exp(random.uniform(log_min, log_max))
+                    config[name] = math.exp(rng.uniform(log_min, log_max))
                 elif dist == "int_uniform":
-                    config[name] = random.randint(int(min_val), int(max_val))
+                    config[name] = rng.randint(int(min_val), int(max_val))
                 else:
-                    raise ValueError(f"Unknown distribution: {dist}")
+                    msg = f"Unknown distribution: {dist}"
+                    raise ValueError(msg)
             else:
-                raise ValueError(f"Parameter '{name}' must have 'values' or 'distribution'")
+                msg = f"Parameter '{name}' must have 'values' or 'distribution'"
+                raise ValueError(msg)
         yield config
 
 
-def generate_sweep_jobs(sweep: SweepConfig, prefix: Optional[str] = None) -> list[SweepJob]:
-    """
-    Generate all jobs for a sweep configuration.
+def generate_sweep_jobs(
+    sweep: SweepConfig,
+    prefix: str | None = None,
+) -> list[SweepJob]:
+    """Generate all jobs for a sweep configuration.
 
     Returns list of SweepJob objects with command, name, tags, and config.
     """
@@ -126,13 +150,17 @@ def generate_sweep_jobs(sweep: SweepConfig, prefix: Optional[str] = None) -> lis
         combinations = list(generate_grid_combinations(sweep.parameters))
     elif sweep.method == "random":
         if sweep.max_runs is None:
-            raise ValueError("Random sweeps require 'max_runs' to be set")
-        combinations = list(generate_random_combinations(sweep.parameters, sweep.max_runs))
+            msg = "Random sweeps require 'max_runs' to be set"
+            raise ValueError(msg)
+        combinations = list(
+            generate_random_combinations(sweep.parameters, sweep.max_runs)
+        )
     else:
-        raise ValueError(f"Unknown sweep method: {sweep.method}")
+        msg = f"Unknown sweep method: {sweep.method}"
+        raise ValueError(msg)
 
     # Build jobs
-    jobs = []
+    jobs: list[SweepJob] = []
     for i, params in enumerate(combinations):
         # Build command with parameters as CLI args
         command = sweep.program.split()
@@ -140,7 +168,7 @@ def generate_sweep_jobs(sweep: SweepConfig, prefix: Optional[str] = None) -> lis
             # Format value appropriately
             if isinstance(value, float):
                 # Use scientific notation for very small values
-                if abs(value) < 0.0001 and value != 0:
+                if abs(value) < SCI_NOTATION_THRESHOLD and value != 0.0:
                     formatted = f"{value:.2e}"
                 else:
                     formatted = str(value)
@@ -154,11 +182,13 @@ def generate_sweep_jobs(sweep: SweepConfig, prefix: Optional[str] = None) -> lis
         # Tags include sweep name
         tags = [f"sweep:{base_name}"]
 
-        jobs.append(SweepJob(
-            command=command,
-            name=job_name,
-            tags=tags,
-            config=params,
-        ))
+        jobs.append(
+            SweepJob(
+                command=command,
+                name=job_name,
+                tags=tags,
+                config=params,
+            )
+        )
 
     return jobs

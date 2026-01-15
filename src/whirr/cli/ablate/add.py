@@ -1,20 +1,21 @@
+# Copyright (c) Syntropy Systems
 """whirr ablate add command."""
+from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Optional
 
 import typer
 from rich.console import Console
 
-from whirr.ablate import FileValue, load_session_by_name
+from whirr.ablate import load_session_by_name
 from whirr.config import require_whirr_dir
+from whirr.models.ablation import ConfigValue, FileValue
 
 console = Console()
 
 
-def parse_value(value: str, project_root: Path) -> Any:
-    """
-    Parse a value string, handling @file references.
+def parse_value(value: str, project_root: Path) -> ConfigValue:
+    """Parse a value string, handling @file references.
 
     - @path/to/file -> FileValue with path and inlined text
     - 123 -> int
@@ -26,13 +27,11 @@ def parse_value(value: str, project_root: Path) -> Any:
         path = Path(file_path)
 
         # Resolve relative to project root if not absolute
-        if not path.is_absolute():
-            full_path = project_root / path
-        else:
-            full_path = path
+        full_path = project_root / path if not path.is_absolute() else path
 
         if not full_path.exists():
-            raise FileNotFoundError(f"File not found: {full_path}")
+            msg = f"File not found: {full_path}"
+            raise FileNotFoundError(msg)
 
         # Read content without stripping
         text = full_path.read_text()
@@ -50,52 +49,50 @@ def parse_value(value: str, project_root: Path) -> Any:
     try:
         if "." in value:
             return float(value)
-        else:
-            return int(value)
+        return int(value)
     except ValueError:
         return value
 
 
 def add(
     name: str = typer.Argument(..., help="Session name"),
-    deltas: List[str] = typer.Argument(..., help="Delta(s) in key=value format"),
-    delta_name: Optional[str] = typer.Option(
+    deltas: list[str] = typer.Argument(..., help="Delta(s) in key=value format"),
+    delta_name: str | None = typer.Option(
         None,
         "--name",
         "-n",
         help="Name for this delta (defaults to first key name)",
     ),
 ) -> None:
-    """
-    Add a delta (parameter change) to an ablation session.
+    """Add a delta (parameter change) to an ablation session.
 
     Examples:
         whirr ablate add weird-behavior temperature=0
         whirr ablate add weird-behavior system=@prompts/v2.txt
         whirr ablate add weird-behavior lr=0.001 batch_size=64 --name "high-lr"
+
     """
     try:
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     try:
         session = load_session_by_name(name, whirr_dir)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] Session '{name}' not found")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # Get project root (parent of .whirr)
     project_root = whirr_dir.parent
 
     # Parse key=value pairs
-    changes = {}
+    changes: dict[str, ConfigValue] = {}
     for delta in deltas:
         if "=" not in delta:
-            console.print(
-                f"[red]Error:[/red] Invalid delta format: '{delta}' (expected key=value)"
-            )
+            message = f"[red]Error:[/red] Invalid delta format: '{delta}'"
+            console.print(f"{message} (expected key=value)")
             raise typer.Exit(1)
 
         key, value = delta.split("=", 1)
@@ -103,13 +100,15 @@ def add(
             changes[key] = parse_value(value, project_root)
         except FileNotFoundError as e:
             console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     # Determine delta name
-    resolved_name: str = delta_name if delta_name is not None else list(changes.keys())[0]
+    resolved_name = delta_name if delta_name is not None else next(iter(changes))
 
     if resolved_name in session.deltas:
-        console.print(f"[yellow]Warning:[/yellow] Overwriting existing delta '{resolved_name}'")
+        console.print(
+            f"[yellow]Warning:[/yellow] Overwriting existing delta '{resolved_name}'"
+        )
 
     session.deltas[resolved_name] = changes
     session.save()

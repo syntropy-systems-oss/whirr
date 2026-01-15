@@ -1,17 +1,19 @@
+# Copyright (c) Syntropy Systems
 """Tests for ablation study functionality."""
 
 import json
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from typer.testing import CliRunner
 
-from whirr.ablate import (
-    AblationSession,
-    FileValue,
-    generate_session_id,
-    load_session_by_name,
-)
+from whirr.ablate import generate_session_id, load_session_by_name
 from whirr.ablate.models import AblationRunResult
 from whirr.cli.main import app
+from whirr.models.ablation import AblationIndex, AblationSession, FileValue
+
+if TYPE_CHECKING:
+    from whirr.models.base import JSONObject
 
 runner = CliRunner()
 
@@ -19,7 +21,7 @@ runner = CliRunner()
 class TestAblationModels:
     """Tests for ablation data models."""
 
-    def test_generate_session_id(self):
+    def test_generate_session_id(self) -> None:
         """Test session ID generation."""
         id1 = generate_session_id()
         id2 = generate_session_id()
@@ -27,7 +29,7 @@ class TestAblationModels:
         assert len(id2) == 6
         assert id1 != id2  # Should be unique
 
-    def test_session_save_load(self, tmp_path):
+    def test_session_save_load(self, tmp_path: Path) -> None:
         """Test session serialization round-trip."""
         session = AblationSession(
             session_id="abc123",
@@ -36,17 +38,17 @@ class TestAblationModels:
             seed_base=12345,
             deltas={"temp": {"temperature": 0}},
         )
-        session._path = tmp_path / "session.json"
+        session.set_path(tmp_path / "session.json")
         session.save()
 
-        loaded = AblationSession.load(session._path)
+        loaded = AblationSession.load(tmp_path / "session.json")
         assert loaded.session_id == "abc123"
         assert loaded.name == "test-session"
         assert loaded.metric == "win"
         assert loaded.seed_base == 12345
         assert loaded.deltas == {"temp": {"temperature": 0}}
 
-    def test_session_with_file_value(self, tmp_path):
+    def test_session_with_file_value(self, tmp_path: Path) -> None:
         """Test session with FileValue in deltas."""
         session = AblationSession(
             session_id="abc123",
@@ -59,16 +61,17 @@ class TestAblationModels:
                 }
             },
         )
-        session._path = tmp_path / "session.json"
+        session.set_path(tmp_path / "session.json")
         session.save()
 
-        loaded = AblationSession.load(session._path)
+        loaded = AblationSession.load(tmp_path / "session.json")
         assert "system" in loaded.deltas
-        assert isinstance(loaded.deltas["system"]["prompt"], FileValue)
-        assert loaded.deltas["system"]["prompt"].path == "prompts/v2.txt"
-        assert loaded.deltas["system"]["prompt"].text == "Hello world"
+        file_val = loaded.deltas["system"]["prompt"]
+        assert isinstance(file_val, FileValue)
+        assert file_val.path == "prompts/v2.txt"
+        assert file_val.text == "Hello world"
 
-    def test_session_with_runs(self, tmp_path):
+    def test_session_with_runs(self, tmp_path: Path) -> None:
         """Test session with run results."""
         session = AblationSession(
             session_id="abc123",
@@ -85,15 +88,15 @@ class TestAblationModels:
                 seed=12345,
             )
         )
-        session._path = tmp_path / "session.json"
+        session.set_path(tmp_path / "session.json")
         session.save()
 
-        loaded = AblationSession.load(session._path)
+        loaded = AblationSession.load(tmp_path / "session.json")
         assert len(loaded.runs) == 1
         assert loaded.runs[0].condition == "baseline"
         assert loaded.runs[0].seed == 12345
 
-    def test_get_seed(self):
+    def test_get_seed(self) -> None:
         """Test deterministic seed derivation."""
         session = AblationSession(
             session_id="abc123",
@@ -105,7 +108,7 @@ class TestAblationModels:
         assert session.get_seed(1) == 1001
         assert session.get_seed(10) == 1010
 
-    def test_get_condition_names(self):
+    def test_get_condition_names(self) -> None:
         """Test condition names include baseline + deltas."""
         session = AblationSession(
             session_id="abc123",
@@ -121,7 +124,7 @@ class TestAblationModels:
 class TestAblateInitCommand:
     """Tests for whirr ablate init."""
 
-    def test_init_creates_session(self, whirr_project):
+    def test_init_creates_session(self, whirr_project: Path) -> None:
         """Test that init creates session file."""
         result = runner.invoke(
             app,
@@ -135,18 +138,18 @@ class TestAblateInitCommand:
         index_path = whirr_project / ".whirr" / "ablations" / "index.json"
         assert index_path.exists()
 
-        with open(index_path) as f:
-            index = json.load(f)
-        assert "test-study" in index
+        index = AblationIndex.model_validate_json(index_path.read_text())
+        assert "test-study" in index.entries
 
         # Check session file exists
-        session_id = index["test-study"]
+        session_id = index.entries["test-study"]
         session_path = whirr_project / ".whirr" / "ablations" / f"{session_id}.json"
         assert session_path.exists()
 
-    def test_init_duplicate_fails(self, whirr_project):
+    def test_init_duplicate_fails(self, whirr_project: Path) -> None:
         """Test that init fails for existing session."""
-        runner.invoke(app, ["ablate", "init", "dup", "--metric", "x"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["ablate", "init", "dup", "--metric", "x"])
         result = runner.invoke(app, ["ablate", "init", "dup", "--metric", "x"])
 
         assert result.exit_code == 1
@@ -156,9 +159,9 @@ class TestAblateInitCommand:
 class TestAblateAddCommand:
     """Tests for whirr ablate add."""
 
-    def test_add_delta(self, whirr_project):
+    def test_add_delta(self, whirr_project: Path) -> None:
         """Test adding a delta."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
         result = runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
 
         assert result.exit_code == 0
@@ -170,9 +173,9 @@ class TestAblateAddCommand:
         assert "temperature" in session.deltas
         assert session.deltas["temperature"]["temperature"] == 0
 
-    def test_add_multiple_params(self, whirr_project):
+    def test_add_multiple_params(self, whirr_project: Path) -> None:
         """Test adding delta with multiple params."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
         result = runner.invoke(
             app,
             ["ablate", "add", "study", "lr=0.001", "batch_size=64", "--name", "high-lr"],
@@ -186,13 +189,13 @@ class TestAblateAddCommand:
         assert session.deltas["high-lr"]["lr"] == 0.001
         assert session.deltas["high-lr"]["batch_size"] == 64
 
-    def test_add_file_value(self, whirr_project):
+    def test_add_file_value(self, whirr_project: Path) -> None:
         """Test adding delta with @file syntax."""
         # Create a test file
         prompt_file = whirr_project / "prompt.txt"
-        prompt_file.write_text("You are a helpful assistant.\n")
+        _ = prompt_file.write_text("You are a helpful assistant.\n")
 
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
         result = runner.invoke(
             app,
             ["ablate", "add", "study", "system=@prompt.txt"],
@@ -208,26 +211,29 @@ class TestAblateAddCommand:
         assert file_val.path == "prompt.txt"
         assert file_val.text == "You are a helpful assistant.\n"
 
-    def test_add_file_preserves_whitespace(self, whirr_project):
+    def test_add_file_preserves_whitespace(self, whirr_project: Path) -> None:
         """Test that @file preserves leading/trailing whitespace."""
         prompt_file = whirr_project / "prompt.txt"
-        prompt_file.write_text("\n\nHello\n\n")
+        _ = prompt_file.write_text("\n\nHello\n\n")
 
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
-        runner.invoke(app, ["ablate", "add", "study", "system=@prompt.txt"])
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "add", "study", "system=@prompt.txt"])
 
         whirr_dir = whirr_project / ".whirr"
         session = load_session_by_name("study", whirr_dir)
-        assert session.deltas["system"]["system"].text == "\n\nHello\n\n"
+        file_val = session.deltas["system"]["system"]
+        assert isinstance(file_val, FileValue)
+        assert file_val.text == "\n\nHello\n\n"
 
 
 class TestAblateRunCommand:
     """Tests for whirr ablate run."""
 
-    def test_run_dry_run(self, whirr_project):
+    def test_run_dry_run(self, whirr_project: Path) -> None:
         """Test dry run shows job preview."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
-        runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
 
         # Note: options must come before positional args due to allow_interspersed_args=False
         result = runner.invoke(
@@ -253,19 +259,21 @@ class TestAblateRunCommand:
         assert "Dry run" in result.stdout
         assert "6 jobs" in result.stdout  # 2 conditions x 3 replicates
 
-    def test_run_no_command_fails(self, whirr_project):
+    def test_run_no_command_fails(self, whirr_project: Path) -> None:
         """Test run without command fails."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
-        runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
 
         result = runner.invoke(app, ["ablate", "run", "study"])
 
         assert result.exit_code == 1
         assert "No command provided" in result.stdout
 
-    def test_run_no_deltas_fails(self, whirr_project):
+    def test_run_no_deltas_fails(self, whirr_project: Path) -> None:
         """Test run without deltas fails."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
 
         result = runner.invoke(
             app,
@@ -275,10 +283,10 @@ class TestAblateRunCommand:
         assert result.exit_code == 1
         assert "No deltas added" in result.stdout
 
-    def test_run_generates_configs(self, whirr_project):
+    def test_run_generates_configs(self, whirr_project: Path) -> None:
         """Test that run generates config files."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
-        runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
 
         # Run with actual submission (will create configs)
         result = runner.invoke(
@@ -309,20 +317,24 @@ class TestAblateRunCommand:
         assert (configs_dir / "temperature-1.json").exists()
 
         # Check config content
-        with open(configs_dir / "temperature-0.json") as f:
-            cfg = json.load(f)
+        cfg = cast(
+            "JSONObject",
+            json.loads((configs_dir / "temperature-0.json").read_text()),
+        )
         assert "__ablate__" in cfg
-        assert cfg["__ablate__"]["condition"] == "temperature"
+        ablate = cast("JSONObject", cfg["__ablate__"])
+        assert ablate["condition"] == "temperature"
         assert cfg["temperature"] == 0
 
 
 class TestAblateRankCommand:
     """Tests for whirr ablate rank."""
 
-    def test_rank_no_runs(self, whirr_project):
+    def test_rank_no_runs(self, whirr_project: Path) -> None:
         """Test rank with no runs fails gracefully."""
-        runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
-        runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["ablate", "init", "study", "--metric", "win"])
+        _ = runner.invoke(app, ["ablate", "add", "study", "temperature=0"])
 
         result = runner.invoke(app, ["ablate", "rank", "study"])
 

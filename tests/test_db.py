@@ -1,19 +1,22 @@
+# Copyright (c) Syntropy Systems
 """Tests for whirr database operations."""
 
+import sqlite3
+from pathlib import Path
 
 from whirr.db import (
     cancel_job,
     claim_job,
     complete_job,
+    complete_run,
     create_job,
     create_run,
-    complete_run,
     get_active_jobs,
     get_job,
     get_run,
     get_runs,
-    register_worker,
     get_workers,
+    register_worker,
     unregister_worker,
 )
 
@@ -21,7 +24,7 @@ from whirr.db import (
 class TestJobOperations:
     """Tests for job CRUD operations."""
 
-    def test_create_job(self, db_connection):
+    def test_create_job(self, db_connection: sqlite3.Connection) -> None:
         """Test creating a job."""
         job_id = create_job(
             db_connection,
@@ -35,14 +38,14 @@ class TestJobOperations:
 
         job = get_job(db_connection, job_id)
         assert job is not None
-        assert job["name"] == "test-job"
-        assert job["status"] == "queued"
-        assert job["workdir"] == "/tmp/test"
+        assert job.name == "test-job"
+        assert job.status == "queued"
+        assert job.workdir == "/tmp/test"
 
-    def test_claim_job(self, db_connection):
+    def test_claim_job(self, db_connection: sqlite3.Connection) -> None:
         """Test atomic job claiming."""
         # Create a job
-        create_job(
+        _ = create_job(
             db_connection,
             command_argv=["python", "test.py"],
             workdir="/tmp/test",
@@ -53,23 +56,24 @@ class TestJobOperations:
         job = claim_job(db_connection, "worker-1")
 
         assert job is not None
-        assert job["command_argv"] == ["python", "test.py"]
-        assert job["workdir"] == "/tmp/test"
+        assert job.command_argv == ["python", "test.py"]
+        assert job.workdir == "/tmp/test"
 
         # Job should now be running
-        updated = get_job(db_connection, job["id"])
-        assert updated["status"] == "running"
-        assert updated["worker_id"] == "worker-1"
+        updated = get_job(db_connection, job.id)
+        assert updated is not None
+        assert updated.status == "running"
+        assert updated.worker_id == "worker-1"
 
-    def test_claim_empty_queue(self, db_connection):
+    def test_claim_empty_queue(self, db_connection: sqlite3.Connection) -> None:
         """Test claiming when no jobs available."""
         job = claim_job(db_connection, "worker-1")
         assert job is None
 
-    def test_claim_concurrent(self, db_connection):
+    def test_claim_concurrent(self, db_connection: sqlite3.Connection) -> None:
         """Test that only one worker can claim a job."""
         # Create one job
-        create_job(
+        _ = create_job(
             db_connection,
             command_argv=["python", "test.py"],
             workdir="/tmp/test",
@@ -83,30 +87,31 @@ class TestJobOperations:
         job2 = claim_job(db_connection, "worker-2")
         assert job2 is None
 
-    def test_complete_job_success(self, db_connection):
+    def test_complete_job_success(self, db_connection: sqlite3.Connection) -> None:
         """Test completing a job successfully."""
         job_id = create_job(
             db_connection,
             command_argv=["python", "test.py"],
             workdir="/tmp/test",
         )
-        claim_job(db_connection, "worker-1")
+        _ = claim_job(db_connection, "worker-1")
 
         complete_job(db_connection, job_id, exit_code=0, run_id="run-123")
 
         job = get_job(db_connection, job_id)
-        assert job["status"] == "completed"
-        assert job["exit_code"] == 0
-        assert job["run_id"] == "run-123"
+        assert job is not None
+        assert job.status == "completed"
+        assert job.exit_code == 0
+        assert job.run_id == "run-123"
 
-    def test_complete_job_failure(self, db_connection):
+    def test_complete_job_failure(self, db_connection: sqlite3.Connection) -> None:
         """Test completing a failed job."""
         job_id = create_job(
             db_connection,
             command_argv=["python", "test.py"],
             workdir="/tmp/test",
         )
-        claim_job(db_connection, "worker-1")
+        _ = claim_job(db_connection, "worker-1")
 
         complete_job(
             db_connection,
@@ -116,11 +121,12 @@ class TestJobOperations:
         )
 
         job = get_job(db_connection, job_id)
-        assert job["status"] == "failed"
-        assert job["exit_code"] == 1
-        assert job["error_message"] == "Out of memory"
+        assert job is not None
+        assert job.status == "failed"
+        assert job.exit_code == 1
+        assert job.error_message == "Out of memory"
 
-    def test_cancel_queued_job(self, db_connection):
+    def test_cancel_queued_job(self, db_connection: sqlite3.Connection) -> None:
         """Test cancelling a queued job."""
         job_id = create_job(
             db_connection,
@@ -132,32 +138,34 @@ class TestJobOperations:
 
         assert old_status == "queued"
         job = get_job(db_connection, job_id)
-        assert job["status"] == "cancelled"
+        assert job is not None
+        assert job.status == "cancelled"
 
-    def test_cancel_running_job(self, db_connection):
+    def test_cancel_running_job(self, db_connection: sqlite3.Connection) -> None:
         """Test cancelling a running job sets cancel_requested_at flag."""
         job_id = create_job(
             db_connection,
             command_argv=["python", "test.py"],
             workdir="/tmp/test",
         )
-        claim_job(db_connection, "worker-1")
+        _ = claim_job(db_connection, "worker-1")
 
         old_status = cancel_job(db_connection, job_id)
 
         assert old_status == "running"
         job = get_job(db_connection, job_id)
-        assert job["status"] == "running"  # Still running
-        assert job["cancel_requested_at"] is not None
+        assert job is not None
+        assert job.status == "running"  # Still running
+        assert job.cancel_requested_at is not None
 
-    def test_get_active_jobs(self, db_connection):
+    def test_get_active_jobs(self, db_connection: sqlite3.Connection) -> None:
         """Test getting active jobs."""
-        create_job(db_connection, command_argv=["cmd1"], workdir="/tmp", name="job1")
-        create_job(db_connection, command_argv=["cmd2"], workdir="/tmp", name="job2")
+        _ = create_job(db_connection, command_argv=["cmd1"], workdir="/tmp", name="job1")
+        _ = create_job(db_connection, command_argv=["cmd2"], workdir="/tmp", name="job2")
         job3_id = create_job(db_connection, command_argv=["cmd3"], workdir="/tmp", name="job3")
 
         # Claim and complete one
-        claim_job(db_connection, "worker-1")
+        _ = claim_job(db_connection, "worker-1")
         complete_job(db_connection, job3_id, exit_code=0)
 
         active = get_active_jobs(db_connection)
@@ -169,7 +177,7 @@ class TestJobOperations:
 class TestRunOperations:
     """Tests for run CRUD operations."""
 
-    def test_create_run(self, db_connection, temp_dir):
+    def test_create_run(self, db_connection: sqlite3.Connection, temp_dir: Path) -> None:
         """Test creating a run."""
         run_dir = temp_dir / "runs" / "test-run"
         run_dir.mkdir(parents=True)
@@ -185,10 +193,10 @@ class TestRunOperations:
 
         run = get_run(db_connection, "test-run")
         assert run is not None
-        assert run["name"] == "Test Run"
-        assert run["status"] == "running"
+        assert run.name == "Test Run"
+        assert run.status == "running"
 
-    def test_complete_run(self, db_connection, temp_dir):
+    def test_complete_run(self, db_connection: sqlite3.Connection, temp_dir: Path) -> None:
         """Test completing a run."""
         run_dir = temp_dir / "runs" / "test-run"
         run_dir.mkdir(parents=True)
@@ -208,10 +216,11 @@ class TestRunOperations:
         )
 
         run = get_run(db_connection, "test-run")
-        assert run["status"] == "completed"
-        assert run["finished_at"] is not None
+        assert run is not None
+        assert run.status == "completed"
+        assert run.finished_at is not None
 
-    def test_get_runs_with_filters(self, db_connection, temp_dir):
+    def test_get_runs_with_filters(self, db_connection: sqlite3.Connection, temp_dir: Path) -> None:
         """Test filtering runs."""
         for i in range(3):
             run_dir = temp_dir / "runs" / f"run-{i}"
@@ -239,20 +248,20 @@ class TestRunOperations:
 class TestWorkerOperations:
     """Tests for worker registration."""
 
-    def test_register_worker(self, db_connection):
+    def test_register_worker(self, db_connection: sqlite3.Connection) -> None:
         """Test worker registration."""
         register_worker(db_connection, "host:gpu0", 1234, "host", 0)
 
         workers = get_workers(db_connection)
         assert len(workers) == 1
-        assert workers[0]["id"] == "host:gpu0"
-        assert workers[0]["pid"] == 1234
-        assert workers[0]["status"] == "idle"
+        assert workers[0].id == "host:gpu0"
+        assert workers[0].pid == 1234
+        assert workers[0].status == "idle"
 
-    def test_unregister_worker(self, db_connection):
+    def test_unregister_worker(self, db_connection: sqlite3.Connection) -> None:
         """Test worker unregistration."""
         register_worker(db_connection, "host:gpu0", 1234, "host", 0)
         unregister_worker(db_connection, "host:gpu0")
 
         workers = get_workers(db_connection)
-        assert workers[0]["status"] == "offline"
+        assert workers[0].status == "offline"

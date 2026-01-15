@@ -35,7 +35,7 @@
                     {% endif %}
                 </td>
                 <td class="px-3 py-2 text-xs text-zinc-500 font-mono">
-                    {{ run.get('duration_s')|format_duration }}
+                    {{ run.duration_seconds|format_duration }}
                 </td>
                 <td class="px-3 py-2 text-xs text-zinc-600">
                     {{ run.started_at|format_time_ago }}

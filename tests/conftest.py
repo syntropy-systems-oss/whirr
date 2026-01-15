@@ -1,24 +1,27 @@
+# Copyright (c) Syntropy Systems
 """Pytest fixtures for whirr tests."""
 
 import os
+import sqlite3
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 
 # Store original cwd at module load time
-_original_cwd = os.getcwd()
+_original_cwd = Path.cwd()
 
 
 @pytest.fixture
-def temp_dir():
+def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
 
 
 @pytest.fixture
-def whirr_project(temp_dir):
+def whirr_project(temp_dir: Path) -> Generator[Path, None, None]:
     """Create a temporary whirr project directory."""
     from whirr.db import init_db
 
@@ -41,7 +44,7 @@ def whirr_project(temp_dir):
 
 
 @pytest.fixture
-def db_connection(whirr_project):
+def db_connection(whirr_project: Path) -> Generator[sqlite3.Connection, None, None]:
     """Get a database connection for the test project."""
     from whirr.db import get_connection
 

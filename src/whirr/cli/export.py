@@ -1,9 +1,11 @@
+# Copyright (c) Syntropy Systems
 """Export command - export runs to CSV/JSON."""
+from __future__ import annotations
 
 import csv
 import json
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, cast
 
 import typer
 from rich.console import Console
@@ -12,25 +14,42 @@ from whirr.config import get_db_path, require_whirr_dir
 from whirr.db import get_connection, get_runs
 from whirr.run import read_meta, read_metrics
 
+if TYPE_CHECKING:
+    from whirr.models.base import JSONValue
+    from whirr.models.run import RunMetricRecord
+
 console = Console()
+
+
+def _to_csv_value(value: JSONValue | None) -> str | float | list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return value
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return str(value)
 
 
 def export(
     output: Path = typer.Argument(..., help="Output file path (.csv or .json)"),
-    run_id: Optional[str] = typer.Option(None, "--run", "-r", help="Export specific run"),
-    status: Optional[str] = typer.Option(None, "--status", "-s", help="Filter by status"),
-    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Filter by tag"),
+    run_id: str | None = typer.Option(None, "--run", "-r", help="Export specific run"),
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
+    tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
     include_metrics: bool = typer.Option(
         False, "--metrics", "-m", help="Include full metrics history (JSON only)"
     ),
     limit: int = typer.Option(100, "--limit", "-l", help="Max runs to export"),
-):
+) -> None:
     """Export runs to CSV or JSON format.
 
     Examples:
         whirr export runs.csv
         whirr export runs.json --metrics
         whirr export --run abc123 run.json
+
     """
     whirr_dir = require_whirr_dir()
     db_path = get_db_path(whirr_dir)
@@ -43,7 +62,9 @@ def export(
         raise typer.Exit(1)
 
     if include_metrics and suffix == ".csv":
-        console.print("[yellow]Warning: --metrics only supported for JSON export[/yellow]")
+        console.print(
+            "[yellow]Warning: --metrics only supported for JSON export[/yellow]"
+        )
         include_metrics = False
 
     try:
@@ -52,7 +73,7 @@ def export(
 
         # Filter by specific run ID if provided
         if run_id:
-            all_runs = [r for r in all_runs if r["id"].startswith(run_id)]
+            all_runs = [r for r in all_runs if r.id.startswith(run_id)]
             if not all_runs:
                 console.print(f"[red]Run not found: {run_id}[/red]")
                 raise typer.Exit(1)
@@ -62,35 +83,33 @@ def export(
             raise typer.Exit(0)
 
         # Build export data
-        export_data = []
+        export_data: list[dict[str, JSONValue]] = []
         for run in all_runs:
-            run_data = {
-                "id": run["id"],
-                "name": run.get("name"),
-                "status": run["status"],
-                "started_at": run.get("started_at"),
-                "finished_at": run.get("finished_at"),
-                "duration_s": run.get("duration_s"),
-                "exit_code": run.get("exit_code"),
-                "tags": run.get("tags"),
-                "run_dir": run.get("run_dir"),
+            tags_value = cast("JSONValue", run.tags) if run.tags is not None else None
+            run_data: dict[str, JSONValue] = {
+                "id": run.id,
+                "name": run.name,
+                "status": run.status,
+                "started_at": run.started_at,
+                "finished_at": run.finished_at,
+                "duration_s": run.duration_seconds,
+                "exit_code": None,
+                "tags": tags_value,
+                "run_dir": run.run_dir,
             }
 
             # Parse config
-            config = run.get("config")
-            if isinstance(config, str):
-                config = json.loads(config)
-            run_data["config"] = config or {}
+            run_data["config"] = run.config.values if run.config else {}
 
             # Get summary metrics from meta.json
-            run_dir = Path(run["run_dir"]) if run.get("run_dir") else None
-            summary = {}
-            metrics_history = []
+            run_dir = Path(run.run_dir) if run.run_dir else None
+            summary: dict[str, JSONValue] = {}
+            metrics_history: list[RunMetricRecord] = []
 
             if run_dir and run_dir.exists():
                 meta = read_meta(run_dir)
-                if meta and meta.get("summary"):
-                    summary = meta["summary"]
+                if meta and meta.summary:
+                    summary = meta.summary.values
 
                 if include_metrics:
                     metrics_path = run_dir / "metrics.jsonl"
@@ -99,13 +118,17 @@ def export(
 
             run_data["summary"] = summary
             if include_metrics:
-                run_data["metrics"] = metrics_history
+                metrics_payload = [
+                    record.model_dump(by_alias=True, exclude_none=True)
+                    for record in metrics_history
+                ]
+                run_data["metrics"] = cast("JSONValue", metrics_payload)
 
             export_data.append(run_data)
 
         # Write output
         if suffix == ".json":
-            with open(output, "w") as f:
+            with output.open("w") as f:
                 json.dump(export_data, f, indent=2, default=str)
         else:
             # CSV - flatten config and summary
@@ -121,42 +144,50 @@ def export(
             ]
 
             # Collect all config and summary keys
-            config_keys = set()
-            summary_keys = set()
+            config_keys: set[str] = set()
+            summary_keys: set[str] = set()
             for run_data in export_data:
-                config_keys.update(run_data.get("config", {}).keys())
-                summary_keys.update(run_data.get("summary", {}).keys())
+                config_data = cast("dict[str, JSONValue]", run_data.get("config", {}))
+                config_keys.update(config_data.keys())
+                summary_data = cast("dict[str, JSONValue]", run_data.get("summary", {}))
+                summary_keys.update(summary_data.keys())
 
             config_fields = [f"config.{k}" for k in sorted(config_keys)]
             summary_fields = [f"summary.{k}" for k in sorted(summary_keys)]
             fieldnames.extend(config_fields)
             fieldnames.extend(summary_fields)
 
-            with open(output, "w", newline="") as f:
+            with output.open("w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
                 writer.writeheader()
 
                 for run_data in export_data:
-                    row = {
-                        "id": run_data["id"],
-                        "name": run_data.get("name"),
-                        "status": run_data["status"],
-                        "started_at": run_data.get("started_at"),
-                        "finished_at": run_data.get("finished_at"),
-                        "duration_s": run_data.get("duration_s"),
-                        "exit_code": run_data.get("exit_code"),
-                        "tags": json.dumps(run_data.get("tags"))
-                        if run_data.get("tags")
-                        else None,
+                    row: dict[str, str | float | list[str] | None] = {
+                        "id": _to_csv_value(run_data.get("id")),
+                        "name": _to_csv_value(run_data.get("name")),
+                        "status": _to_csv_value(run_data.get("status")),
+                        "started_at": _to_csv_value(run_data.get("started_at")),
+                        "finished_at": _to_csv_value(run_data.get("finished_at")),
+                        "duration_s": _to_csv_value(run_data.get("duration_s")),
+                        "exit_code": _to_csv_value(run_data.get("exit_code")),
+                        "tags": _to_csv_value(run_data.get("tags")),
                     }
 
                     # Flatten config
-                    for k, v in run_data.get("config", {}).items():
-                        row[f"config.{k}"] = v
+                    config_data = cast(
+                        "dict[str, JSONValue]",
+                        run_data.get("config", {}),
+                    )
+                    for k, v in config_data.items():
+                        row[f"config.{k}"] = _to_csv_value(v)
 
                     # Flatten summary
-                    for k, v in run_data.get("summary", {}).items():
-                        row[f"summary.{k}"] = v
+                    summary_data = cast(
+                        "dict[str, JSONValue]",
+                        run_data.get("summary", {}),
+                    )
+                    for k, v in summary_data.items():
+                        row[f"summary.{k}"] = _to_csv_value(v)
 
                     writer.writerow(row)
 

@@ -1,7 +1,8 @@
+# Copyright (c) Syntropy Systems
 """whirr submit command."""
+from __future__ import annotations
 
-import os
-from typing import Optional
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -14,25 +15,24 @@ console = Console()
 
 def submit(
     ctx: typer.Context,
-    name: Optional[str] = typer.Option(
+    name: str | None = typer.Option(
         None,
         "--name", "-n",
         help="Name for the job",
     ),
-    tags: Optional[str] = typer.Option(
+    tags: str | None = typer.Option(
         None,
         "--tags", "-t",
         help="Comma-separated tags",
     ),
-    server: Optional[str] = typer.Option(
+    server: str | None = typer.Option(
         None,
         "--server", "-s",
         envvar="WHIRR_SERVER_URL",
         help="Server URL for remote submission",
     ),
 ) -> None:
-    """
-    Submit a job to the queue.
+    """Submit a job to the queue.
 
     Use -- to separate whirr options from the command:
 
@@ -48,7 +48,9 @@ def submit(
     if not command_argv:
         console.print("[red]Error:[/red] No command provided")
         console.print("\nUsage: whirr submit [OPTIONS] -- COMMAND...")
-        console.print("\nExample: whirr submit --name baseline -- python train.py --lr 0.01")
+        console.print(
+            "\nExample: whirr submit --name baseline -- python train.py --lr 0.01"
+        )
         raise typer.Exit(1)
 
     # Parse tags
@@ -57,7 +59,7 @@ def submit(
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
     # Store absolute workdir at submission time
-    workdir = os.getcwd()
+    workdir = str(Path.cwd())
 
     if server:
         _submit_remote(server, command_argv, workdir, name, tag_list)
@@ -68,15 +70,15 @@ def submit(
 def _submit_local(
     command_argv: list[str],
     workdir: str,
-    name: Optional[str],
-    tag_list: Optional[list[str]],
+    name: str | None,
+    tag_list: list[str] | None,
 ) -> None:
     """Submit job to local queue."""
     try:
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     db_path = get_db_path(whirr_dir)
     conn = get_connection(db_path)
@@ -99,16 +101,16 @@ def _submit_remote(
     server_url: str,
     command_argv: list[str],
     workdir: str,
-    name: Optional[str],
-    tag_list: Optional[list[str]],
+    name: str | None,
+    tag_list: list[str] | None,
 ) -> None:
     """Submit job to remote server."""
     try:
         from whirr.client import WhirrClient, WhirrClientError
-    except ImportError:
+    except ImportError as e:
         console.print("[red]Error:[/red] httpx is required for remote submission.")
         console.print("Install with: pip install whirr[server]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     client = WhirrClient(server_url)
     try:
@@ -118,10 +120,10 @@ def _submit_remote(
             name=name,
             tags=tag_list,
         )
-        job_id = result["job_id"]
+        job_id = result.job_id
     except WhirrClientError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     finally:
         client.close()
 
@@ -132,8 +134,8 @@ def _print_success(
     job_id: int,
     command_argv: list[str],
     workdir: str,
-    name: Optional[str],
-    tag_list: Optional[list[str]],
+    name: str | None,
+    tag_list: list[str] | None,
     remote: bool = False,
 ) -> None:
     """Print success message after job submission."""

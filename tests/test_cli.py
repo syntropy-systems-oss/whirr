@@ -1,6 +1,8 @@
+# Copyright (c) Syntropy Systems
 """Tests for whirr CLI commands."""
 
 import os
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -12,7 +14,7 @@ runner = CliRunner()
 class TestInitCommand:
     """Tests for whirr init command."""
 
-    def test_init_creates_directory(self, temp_dir):
+    def test_init_creates_directory(self, temp_dir: Path) -> None:
         """Test that init creates .whirr directory."""
         os.chdir(temp_dir)
 
@@ -24,8 +26,9 @@ class TestInitCommand:
         assert (temp_dir / ".whirr" / "config.yaml").exists()
         assert (temp_dir / ".whirr" / "runs").exists()
 
-    def test_init_already_initialized(self, whirr_project):
+    def test_init_already_initialized(self, whirr_project: Path) -> None:
         """Test init when already initialized."""
+        _ = whirr_project
         result = runner.invoke(app, ["init"])
 
         assert result.exit_code == 0
@@ -35,8 +38,9 @@ class TestInitCommand:
 class TestSubmitCommand:
     """Tests for whirr submit command."""
 
-    def test_submit_basic(self, whirr_project):
+    def test_submit_basic(self, whirr_project: Path) -> None:
         """Test basic job submission."""
+        _ = whirr_project
         result = runner.invoke(
             app,
             ["submit", "--", "python", "train.py"],
@@ -45,8 +49,9 @@ class TestSubmitCommand:
         assert result.exit_code == 0
         assert "Submitted job #1" in result.stdout
 
-    def test_submit_with_name(self, whirr_project):
+    def test_submit_with_name(self, whirr_project: Path) -> None:
         """Test submission with name."""
+        _ = whirr_project
         result = runner.invoke(
             app,
             ["submit", "--name", "my-job", "--", "python", "train.py"],
@@ -55,8 +60,9 @@ class TestSubmitCommand:
         assert result.exit_code == 0
         assert "my-job" in result.stdout
 
-    def test_submit_with_tags(self, whirr_project):
+    def test_submit_with_tags(self, whirr_project: Path) -> None:
         """Test submission with tags."""
+        _ = whirr_project
         result = runner.invoke(
             app,
             ["submit", "--tags", "test,baseline", "--", "python", "train.py"],
@@ -65,15 +71,17 @@ class TestSubmitCommand:
         assert result.exit_code == 0
         assert "test, baseline" in result.stdout
 
-    def test_submit_no_command(self, whirr_project):
+    def test_submit_no_command(self, whirr_project: Path) -> None:
         """Test submit without command fails."""
+        _ = whirr_project
         result = runner.invoke(app, ["submit"])
 
         assert result.exit_code == 1
         assert "No command provided" in result.stdout
 
-    def test_submit_complex_command(self, whirr_project):
+    def test_submit_complex_command(self, whirr_project: Path) -> None:
         """Test submit with complex command."""
+        _ = whirr_project
         result = runner.invoke(
             app,
             ["submit", "--", "python", "train.py", "--lr", "0.01", "--epochs", "100"],
@@ -82,8 +90,9 @@ class TestSubmitCommand:
         assert result.exit_code == 0
         assert "python train.py --lr 0.01 --epochs 100" in result.stdout
 
-    def test_submit_stores_workdir(self, whirr_project):
+    def test_submit_stores_workdir(self, whirr_project: Path) -> None:
         """Test that submit stores the working directory."""
+        _ = whirr_project
         result = runner.invoke(
             app,
             ["submit", "--", "echo", "hello"],
@@ -96,18 +105,20 @@ class TestSubmitCommand:
 class TestStatusCommand:
     """Tests for whirr status command."""
 
-    def test_status_empty(self, whirr_project):
+    def test_status_empty(self, whirr_project: Path) -> None:
         """Test status with no jobs."""
+        _ = whirr_project
         result = runner.invoke(app, ["status"])
 
         assert result.exit_code == 0
         assert "No active jobs" in result.stdout
 
-    def test_status_with_jobs(self, whirr_project):
+    def test_status_with_jobs(self, whirr_project: Path) -> None:
         """Test status with queued jobs."""
+        _ = whirr_project
         # Submit some jobs
-        runner.invoke(app, ["submit", "--name", "job1", "--", "echo", "1"])
-        runner.invoke(app, ["submit", "--name", "job2", "--", "echo", "2"])
+        _ = runner.invoke(app, ["submit", "--name", "job1", "--", "echo", "1"])
+        _ = runner.invoke(app, ["submit", "--name", "job2", "--", "echo", "2"])
 
         result = runner.invoke(app, ["status"])
 
@@ -116,9 +127,10 @@ class TestStatusCommand:
         assert "job2" in result.stdout
         assert "queued" in result.stdout
 
-    def test_status_specific_job(self, whirr_project):
+    def test_status_specific_job(self, whirr_project: Path) -> None:
         """Test status for specific job."""
-        runner.invoke(app, ["submit", "--name", "test-job", "--", "echo", "hello"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["submit", "--name", "test-job", "--", "echo", "hello"])
 
         result = runner.invoke(app, ["status", "1"])
 
@@ -130,27 +142,30 @@ class TestStatusCommand:
 class TestCancelCommand:
     """Tests for whirr cancel command."""
 
-    def test_cancel_queued(self, whirr_project):
+    def test_cancel_queued(self, whirr_project: Path) -> None:
         """Test cancelling a queued job."""
-        runner.invoke(app, ["submit", "--", "echo", "hello"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["submit", "--", "echo", "hello"])
 
         result = runner.invoke(app, ["cancel", "1"])
 
         assert result.exit_code == 0
         assert "Cancelled job #1" in result.stdout
 
-    def test_cancel_not_found(self, whirr_project):
+    def test_cancel_not_found(self, whirr_project: Path) -> None:
         """Test cancelling nonexistent job."""
+        _ = whirr_project
         result = runner.invoke(app, ["cancel", "999"])
 
         assert result.exit_code == 1
         assert "not found" in result.stdout
 
-    def test_cancel_all_queued(self, whirr_project):
+    def test_cancel_all_queued(self, whirr_project: Path) -> None:
         """Test cancelling all queued jobs."""
-        runner.invoke(app, ["submit", "--", "echo", "1"])
-        runner.invoke(app, ["submit", "--", "echo", "2"])
-        runner.invoke(app, ["submit", "--", "echo", "3"])
+        _ = whirr_project
+        _ = runner.invoke(app, ["submit", "--", "echo", "1"])
+        _ = runner.invoke(app, ["submit", "--", "echo", "2"])
+        _ = runner.invoke(app, ["submit", "--", "echo", "3"])
 
         result = runner.invoke(app, ["cancel", "--all-queued"])
 
@@ -161,15 +176,16 @@ class TestCancelCommand:
 class TestDoctorCommand:
     """Tests for whirr doctor command."""
 
-    def test_doctor_initialized(self, whirr_project):
+    def test_doctor_initialized(self, whirr_project: Path) -> None:
         """Test doctor on initialized project."""
+        _ = whirr_project
         result = runner.invoke(app, ["doctor"])
 
         assert result.exit_code == 0
         assert "whirr directory" in result.stdout
         assert "SQLite: WAL mode enabled" in result.stdout
 
-    def test_doctor_not_initialized(self, temp_dir):
+    def test_doctor_not_initialized(self, temp_dir: Path) -> None:
         """Test doctor when not initialized."""
         os.chdir(temp_dir)
 
@@ -182,8 +198,9 @@ class TestDoctorCommand:
 class TestRunsCommand:
     """Tests for whirr runs command."""
 
-    def test_runs_empty(self, whirr_project):
+    def test_runs_empty(self, whirr_project: Path) -> None:
         """Test runs with no runs."""
+        _ = whirr_project
         result = runner.invoke(app, ["runs"])
 
         assert result.exit_code == 0

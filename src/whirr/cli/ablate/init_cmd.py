@@ -1,3 +1,4 @@
+# Copyright (c) Syntropy Systems
 """whirr ablate init command."""
 
 import typer
@@ -18,17 +19,17 @@ def init(
         help="Metric to track (e.g., 'win', 'loss', 'accuracy')",
     ),
 ) -> None:
-    """
-    Initialize a new ablation study session.
+    """Initialize a new ablation study session.
 
     Example:
         whirr ablate init weird-behavior --metric win
+
     """
     try:
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if session_exists(name, whirr_dir):
         console.print(f"[red]Error:[/red] Session '{name}' already exists")
@@ -38,14 +39,16 @@ def init(
         session = create_session(name, metric, whirr_dir)
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     console.print(f"[green]Created ablation session:[/green] {name}")
     console.print(f"  [dim]session_id:[/dim] {session.session_id}")
     console.print(f"  [dim]metric:[/dim] {metric}")
     console.print(f"  [dim]seed_base:[/dim] {session.seed_base}")
     console.print("\nNext steps:")
-    console.print(f"  1. Add deltas: [cyan]whirr ablate add {name} temperature=0[/cyan]")
     console.print(
-        f"  2. Run study:  [cyan]whirr ablate run {name} -- python eval.py --seed {{{{seed}}}} --cfg {{{{cfg_path}}}}[/cyan]"
+        f"  1. Add deltas: [cyan]whirr ablate add {name} temperature=0[/cyan]"
     )
+    step_prefix = f"  2. Run study:  [cyan]whirr ablate run {name} -- python eval.py"
+    step_suffix = "--seed {{{{seed}}}} --cfg {{{{cfg_path}}}}[/cyan]"
+    console.print(f"{step_prefix} {step_suffix}")

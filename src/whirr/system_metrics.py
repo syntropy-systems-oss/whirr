@@ -1,12 +1,27 @@
+# Copyright (c) Syntropy Systems
 """System metrics collection (GPU, CPU, memory)."""
+from __future__ import annotations
 
-import json
+import logging
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from threading import Event, Thread
-from typing import Optional, Union
+from typing import TYPE_CHECKING, cast
+
+from whirr.models.run import SystemMetricRecord
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+logger = logging.getLogger(__name__)
+GPU_FIELD_COUNT = 4
 
 
 @dataclass
@@ -14,17 +29,17 @@ class SystemMetrics:
     """System metrics snapshot."""
 
     timestamp: str
-    cpu_percent: Optional[float] = None
-    memory_used_gb: Optional[float] = None
-    memory_total_gb: Optional[float] = None
-    gpu_utilization: Optional[float] = None
-    gpu_memory_used_gb: Optional[float] = None
-    gpu_memory_total_gb: Optional[float] = None
-    gpu_name: Optional[str] = None
+    cpu_percent: float | None = None
+    memory_used_gb: float | None = None
+    memory_total_gb: float | None = None
+    gpu_utilization: float | None = None
+    gpu_memory_used_gb: float | None = None
+    gpu_memory_total_gb: float | None = None
+    gpu_name: str | None = None
 
-    def to_dict(self) -> dict[str, Union[str, float]]:
+    def to_dict(self) -> dict[str, str | float]:
         """Convert to dictionary, excluding None values."""
-        result: dict[str, Union[str, float]] = {"_timestamp": self.timestamp}
+        result: dict[str, str | float] = {"_timestamp": self.timestamp}
         if self.cpu_percent is not None:
             result["cpu_percent"] = self.cpu_percent
         if self.memory_used_gb is not None:
@@ -42,64 +57,72 @@ class SystemMetrics:
         return result
 
 
-def get_cpu_metrics() -> tuple[Optional[float], Optional[float], Optional[float]]:
-    """
-    Get CPU and memory metrics.
+def get_cpu_metrics() -> tuple[float | None, float | None, float | None]:
+    """Get CPU and memory metrics.
 
     Returns (cpu_percent, memory_used_gb, memory_total_gb).
     """
+    if psutil is None:
+        return None, None, None
     try:
-        import psutil
         cpu_percent = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
-        memory_used_gb = mem.used / (1024 ** 3)
-        memory_total_gb = mem.total / (1024 ** 3)
+        used = cast("int", mem.used)
+        total = cast("int", mem.total)
+        memory_used_gb = used / (1024**3)
+        memory_total_gb = total / (1024**3)
+    except (AttributeError, OSError, ValueError):
+        return None, None, None
+    else:
         return cpu_percent, memory_used_gb, memory_total_gb
-    except ImportError:
-        return None, None, None
-    except Exception:
-        return None, None, None
 
 
 def get_gpu_metrics() -> tuple[
-    Optional[float],
-    Optional[float],
-    Optional[float],
-    Optional[str],
+    float | None,
+    float | None,
+    float | None,
+    str | None,
 ]:
-    """
-    Get GPU metrics using nvidia-smi.
+    """Get GPU metrics using nvidia-smi.
 
     Returns (utilization, memory_used_gb, memory_total_gb, gpu_name).
     """
+    nvidia_smi = shutil.which("nvidia-smi")
+    if nvidia_smi is None:
+        return None, None, None, None
+
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [
-                "nvidia-smi",
+                nvidia_smi,
                 "--query-gpu=utilization.gpu,memory.used,memory.total,name",
                 "--format=csv,noheader,nounits",
             ],
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, None, None, None
 
-        if result.returncode != 0:
-            return None, None, None, None
+    if result.returncode != 0:
+        return None, None, None, None
 
-        # Parse first GPU
-        line = result.stdout.strip().split("\n")[0]
-        parts = [p.strip() for p in line.split(",")]
+    # Parse first GPU
+    line = result.stdout.strip().split("\n")[0]
+    parts = [p.strip() for p in line.split(",")]
 
-        if len(parts) >= 4:
+    if len(parts) >= GPU_FIELD_COUNT:
+        try:
             util = float(parts[0])
             mem_used = float(parts[1]) / 1024  # MB to GB
             mem_total = float(parts[2]) / 1024  # MB to GB
             name = parts[3]
+        except ValueError:
+            return None, None, None, None
+        else:
             return util, mem_used, mem_total, name
-
-    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-        pass
 
     return None, None, None, None
 
@@ -124,24 +147,29 @@ def collect_metrics() -> SystemMetrics:
 
 
 class SystemMetricsCollector:
-    """
-    Background collector that periodically samples system metrics.
+    """Background collector that periodically samples system metrics.
 
     Writes to system.jsonl in the run directory.
     """
 
-    def __init__(self, run_dir: Path, interval: float = 10.0):
-        """
-        Initialize collector.
+    _run_dir: Path
+    _interval: float
+    _stop_event: Event
+    _thread: Thread | None
+    _metrics_path: Path
+
+    def __init__(self, run_dir: Path, interval: float = 10.0) -> None:
+        """Initialize collector.
 
         Args:
             run_dir: Directory to write system.jsonl
             interval: Collection interval in seconds
+
         """
         self._run_dir = run_dir
         self._interval = interval
         self._stop_event = Event()
-        self._thread: Optional[Thread] = None
+        self._thread = None
         self._metrics_path = run_dir / "system.jsonl"
 
     def start(self) -> None:
@@ -168,13 +196,14 @@ class SystemMetricsCollector:
             try:
                 metrics = collect_metrics()
                 self._write_metrics(metrics)
-            except Exception:
-                pass  # Don't crash on collection errors
+            except Exception as exc:
+                logger.exception("System metrics collection failed", exc_info=exc)
 
-            self._stop_event.wait(timeout=self._interval)
+            _ = self._stop_event.wait(timeout=self._interval)
 
     def _write_metrics(self, metrics: SystemMetrics) -> None:
         """Append metrics to system.jsonl."""
-        with open(self._metrics_path, "a") as f:
-            f.write(json.dumps(metrics.to_dict()) + "\n")
-            f.flush()
+        with self._metrics_path.open("a") as f:
+            record = SystemMetricRecord.model_validate(metrics.to_dict())
+            _ = f.write(record.model_dump_json(by_alias=True) + "\n")
+            _ = f.flush()

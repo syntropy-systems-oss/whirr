@@ -29,6 +29,7 @@ dependencies = [
     "typer>=0.9.0",
     "rich>=13.0",
     "pyyaml>=6.0",
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -77,22 +78,49 @@ packages = ["src/whirr"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "E501",
+    "PLC0415",
+    "PLR2004",
+    "S101",  # pytest requires assert, everything else enforced
+    "S108",
+]
+"src/whirr/cli/**" = [
+    "B008",
+    "C901",
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "PLC0415",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR2004",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # conflicts with ruff format
+    "ISC001",  # conflicts with ruff format
+]
+
+[tool.ruff.lint.flake8-copyright]
+notice-rgx = "(?i)Copyright\\s+\\(c\\)\\s+Syntropy\\s+Systems"
+min-file-size = 1
+
 [tool.basedpyright]
-include = ["src"]
-pythonVersion = "3.9"
-typeCheckingMode = "standard"
-# Disable deprecated warnings since we need Python 3.9 compatibility
+typeCheckingMode = "all"
 reportDeprecated = false
-# Allow Any for flexibility in JSON handling
-reportExplicitAny = false
-reportAny = false
-reportUnknownArgumentType = false
-reportUnknownVariableType = false
-reportUnknownMemberType = false
-reportUnknownParameterType = false
-# Typer uses function calls in defaults
 reportCallInDefaultInitializer = false
-# Private usage is intentional in some cases
-reportPrivateUsage = false
-# Unused call results are common with decorators
-reportUnusedCallResult = false
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.37.1",
+    "ruff>=0.14.11",
+]

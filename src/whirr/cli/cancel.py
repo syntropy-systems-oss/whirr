@@ -1,6 +1,6 @@
+# Copyright (c) Syntropy Systems
 """whirr cancel command."""
-
-from typing import Optional
+from __future__ import annotations
 
 import typer
 from rich.console import Console
@@ -12,7 +12,7 @@ console = Console()
 
 
 def cancel(
-    job_id: Optional[int] = typer.Argument(
+    job_id: int | None = typer.Argument(
         None,
         help="Job ID to cancel",
     ),
@@ -22,8 +22,7 @@ def cancel(
         help="Cancel all queued jobs",
     ),
 ) -> None:
-    """
-    Cancel a job.
+    """Cancel a job.
 
     For queued jobs: marks as cancelled immediately.
     For running jobs: signals the worker to terminate the job.
@@ -36,7 +35,7 @@ def cancel(
         whirr_dir = require_whirr_dir()
     except RuntimeError as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     db_path = get_db_path(whirr_dir)
     conn = get_connection(db_path)
@@ -49,14 +48,18 @@ def cancel(
             else:
                 console.print("[dim]No queued jobs to cancel[/dim]")
         else:
-            assert job_id is not None  # guaranteed by check at line 31
+            if job_id is None:
+                console.print("[red]Error:[/red] Job ID is required")
+                raise typer.Exit(1)
             job = get_job(conn, job_id)
             if job is None:
                 console.print(f"[red]Error:[/red] Job #{job_id} not found")
                 raise typer.Exit(1)
 
-            if job["status"] in ("completed", "failed", "cancelled"):
-                console.print(f"[yellow]Job #{job_id} is already {job['status']}[/yellow]")
+            if job.status in ("completed", "failed", "cancelled"):
+                console.print(
+                    f"[yellow]Job #{job_id} is already {job.status}[/yellow]"
+                )
                 return
 
             old_status = cancel_job(conn, job_id)
@@ -64,7 +67,9 @@ def cancel(
             if old_status == "queued":
                 console.print(f"[green]Cancelled job #{job_id}[/green]")
             elif old_status == "running":
-                console.print(f"[yellow]Cancellation requested for job #{job_id}[/yellow]")
+                console.print(
+                    f"[yellow]Cancellation requested for job #{job_id}[/yellow]"
+                )
                 console.print("[dim]Worker will terminate the job shortly[/dim]")
     finally:
         conn.close()
