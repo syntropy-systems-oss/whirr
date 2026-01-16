@@ -369,12 +369,32 @@ def create_app(  # noqa: C901, PLR0915
                 detail=f"Job {job_id} is not owned by worker {request.worker_id}",
             )
 
+        # Auto-create run record if run_id is provided and run doesn't exist yet
+        if request.run_id:
+            existing_run = db.get_run(request.run_id)
+            if existing_run is None:
+                data_dir = _get_data_dir(app)
+                run_dir = str(data_dir / "runs" / request.run_id)
+                db.create_run(
+                    run_id=request.run_id,
+                    run_dir=run_dir,
+                    name=job.name,
+                    config=job.config.values if job.config else None,
+                    tags=job.tags,
+                    job_id=job_id,
+                )
+
         db.complete_job(
             job_id=job_id,
             exit_code=request.exit_code,
             run_id=request.run_id,
             error_message=request.error_message,
         )
+
+        # Update run status based on exit code
+        if request.run_id:
+            run_status = "completed" if request.exit_code == 0 else "failed"
+            db.complete_run(request.run_id, run_status)
 
         status = "completed" if request.exit_code == 0 else "failed"
         return MessageResponse(message=f"Job {job_id} marked as {status}")
