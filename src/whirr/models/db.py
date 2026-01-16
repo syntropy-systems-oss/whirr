@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from datetime import datetime
+from typing import Optional, Union, cast
 
 from pydantic import Field, TypeAdapter, field_validator
 
@@ -125,3 +126,12 @@ class WorkerRecord(WhirrBaseModel):
     started_at: Optional[str] = None
     last_heartbeat: Optional[str] = None
     heartbeat_at: Optional[str] = None
+
+    @field_validator("started_at", "last_heartbeat", "heartbeat_at", mode="before")
+    @classmethod
+    def _parse_datetime(cls, value: object) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return cast(str, value)
