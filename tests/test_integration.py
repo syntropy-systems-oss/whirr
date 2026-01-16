@@ -1,6 +1,8 @@
 # Copyright (c) Syntropy Systems
 """Integration tests for whirr - end-to-end workflows."""
 
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path

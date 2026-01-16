@@ -1,6 +1,8 @@
 # Copyright (c) Syntropy Systems
 """whirr retry command."""
 
+from typing import cast
+
 import typer
 from rich.console import Console
 
@@ -12,7 +14,7 @@ console = Console()
 
 def retry(
     job_id: int = typer.Argument(
-        ...,
+        default=cast("int", ...),
         help="Job ID to retry",
     ),
 ) -> None:

@@ -1,5 +1,8 @@
 # Copyright (c) Syntropy Systems
 """whirr ablate init command."""
+from __future__ import annotations
+
+from typing import cast
 
 import typer
 from rich.console import Console
@@ -11,9 +14,11 @@ console = Console()
 
 
 def init(
-    name: str = typer.Argument(..., help="Name for the ablation session"),
+    name: str = typer.Argument(
+        cast("str", ...), help="Name for the ablation session"
+    ),
     metric: str = typer.Option(
-        ...,
+        cast("str", ...),
         "--metric",
         "-m",
         help="Metric to track (e.g., 'win', 'loss', 'accuracy')",

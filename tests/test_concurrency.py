@@ -1,6 +1,8 @@
 # Copyright (c) Syntropy Systems
 """Concurrency and stress tests for whirr."""
 
+from __future__ import annotations
+
 import threading
 import time
 from pathlib import Path

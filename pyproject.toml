@@ -89,6 +89,7 @@ target-version = "py39"
     "PLR2004",
     "S101",  # pytest requires assert, everything else enforced
     "S108",
+    "TC003",  # imports used at runtime, not just for type checking
 ]
 "src/whirr/cli/**" = [
     "B008",

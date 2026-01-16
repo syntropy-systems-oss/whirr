@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import typer
 from rich.console import Console
@@ -18,7 +18,7 @@ console = Console()
 
 def sweep(
     config_file: Path = typer.Argument(
-        ...,
+        default=cast("Path", ...),
         help="Path to sweep configuration YAML file",
         exists=True,
     ),

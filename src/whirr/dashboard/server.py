@@ -81,7 +81,7 @@ def get_active_jobs_data() -> list[JobResponse]:
 
         conn = _get_db()
         try:
-            return get_active_jobs(conn)  # type: ignore[return-value]
+            return get_active_jobs(conn)  # pyright: ignore[reportReturnType]
         finally:
             conn.close()
 
@@ -96,7 +96,7 @@ def get_workers_data() -> list[WorkerResponse]:
 
         conn = _get_db()
         try:
-            return get_workers(conn)  # type: ignore[return-value]
+            return get_workers(conn)  # pyright: ignore[reportReturnType]
         finally:
             conn.close()
 
@@ -113,7 +113,7 @@ def get_runs_data(
 
         conn = _get_db()
         try:
-            return get_runs(conn, status=status, tag=tag, limit=limit)  # type: ignore[return-value]
+            return get_runs(conn, status=status, tag=tag, limit=limit)  # pyright: ignore[reportReturnType]
         finally:
             conn.close()
 
@@ -122,13 +122,13 @@ def cancel_job_data(job_id: int) -> None:
     """Cancel a job via either local DB or remote server."""
     if _is_remote_mode():
         with _get_client() as client:
-            client.cancel_job(job_id)
+            _ = client.cancel_job(job_id)
     else:
         from whirr.db import cancel_job
 
         conn = _get_db()
         try:
-            cancel_job(conn, job_id)
+            _ = cancel_job(conn, job_id)
         finally:
             conn.close()
 

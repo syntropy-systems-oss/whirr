@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, TypedDict
+from typing import TYPE_CHECKING, Optional, TypedDict, cast
 
 import typer
 from rich.console import Console
@@ -85,7 +85,7 @@ def substitute_templates(argv: list[str], seed: int, cfg_path: str) -> list[str]
 
 def run(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Session name"),
+    name: str = typer.Argument(default=cast("str", ...), help="Session name"),
     replicates: Optional[int] = typer.Option(
         None,
         "--replicates",

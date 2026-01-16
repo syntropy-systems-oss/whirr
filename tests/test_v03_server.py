@@ -1,6 +1,8 @@
 # Copyright (c) Syntropy Systems
 """Tests for v0.3 server mode features."""
 
+from __future__ import annotations
+
 import importlib.util
 import re
 from pathlib import Path

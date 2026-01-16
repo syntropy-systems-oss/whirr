@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import typer
 from rich.console import Console
@@ -67,7 +67,7 @@ def extract_metric(
 
 
 def rank(
-    name: str = typer.Argument(..., help="Session name"),
+    name: str = typer.Argument(default=cast("str", ...), help="Session name"),
     verbose: bool = typer.Option(
         False,
         "--verbose",

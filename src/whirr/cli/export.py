@@ -36,7 +36,9 @@ def _to_csv_value(value: JSONValue | None) -> str | float | list[str] | None:
 
 
 def export(
-    output: Path = typer.Argument(..., help="Output file path (.csv or .json)"),
+    output: Path = typer.Argument(
+        cast("Path", ...), help="Output file path (.csv or .json)"
+    ),
     run_id: Optional[str] = typer.Option(
         None, "--run", "-r", help="Export specific run"
     ),

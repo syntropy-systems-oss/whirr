@@ -3,6 +3,7 @@
 
 import time
 from pathlib import Path
+from typing import cast
 
 import typer
 from rich.console import Console
@@ -16,7 +17,7 @@ console = Console()
 
 def logs(
     job_id: int = typer.Argument(
-        ...,
+        default=cast("int", ...),
         help="Job ID to show logs for",
     ),
     follow: bool = typer.Option(

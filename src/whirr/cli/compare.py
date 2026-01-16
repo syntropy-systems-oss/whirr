@@ -1,7 +1,9 @@
 # Copyright (c) Syntropy Systems
 """Compare command - compare runs side by side."""
 
-from typing import TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Union, cast
 
 import typer
 from rich.console import Console
@@ -19,7 +21,9 @@ console = Console()
 
 
 def compare(
-    run_ids: list[str] = typer.Argument(..., help="Run IDs to compare (2 or more)"),
+    run_ids: list[str] = typer.Argument(
+        cast("list[str]", ...), help="Run IDs to compare (2 or more)"
+    ),
     metrics: bool = typer.Option(
         False,
         "--metrics",
@@ -152,7 +156,7 @@ def compare(
 
                 for key in sorted(all_metric_keys):
                     metric_values: list[str] = []
-                    numeric_values: list[float | None] = []
+                    numeric_values: list[Union[float, None]] = []
 
                     for summary in summaries:
                         val = summary.get(key)

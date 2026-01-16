@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import typer
 from rich.console import Console
@@ -56,8 +56,10 @@ def parse_value(value: str, project_root: Path) -> ConfigValue:
 
 
 def add(
-    name: str = typer.Argument(..., help="Session name"),
-    deltas: list[str] = typer.Argument(..., help="Delta(s) in key=value format"),
+    name: str = typer.Argument(cast("str", ...), help="Session name"),
+    deltas: list[str] = typer.Argument(
+        cast("list[str]", ...), help="Delta(s) in key=value format"
+    ),
     delta_name: Optional[str] = typer.Option(
         None,
         "--name",

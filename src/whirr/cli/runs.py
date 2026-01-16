@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import typer
 from rich.console import Console
@@ -114,7 +114,7 @@ def runs(
 
 def show(
     run_id: str = typer.Argument(
-        ...,
+        default=cast("str", ...),
         help="Run ID to show details for",
     ),
 ) -> None:
