@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.1...v0.5.2) (2026-01-16)
+
+
+### Bug Fixes
+
+* improve module docstring ([781ab6a](https://github.com/syntropy-systems-oss/whirr/commit/781ab6a84e43078c95a0241c189d5d576eac2231))
+* trigger release ([e5a78ae](https://github.com/syntropy-systems-oss/whirr/commit/e5a78ae319982779485ec5abd9b04ed4bf6f227c))
+
 ## [0.5.1](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.0...v0.5.1) (2026-01-14)
 
 
