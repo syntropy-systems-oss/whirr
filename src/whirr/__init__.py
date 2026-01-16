@@ -1,7 +1,7 @@
 # Copyright (c) Syntropy Systems
 """whirr - Local experiment orchestration.
 
-Queue jobs, track metrics, wake up to results.
+Queue jobs, track metrics, and wake up to results.
 """
 
 from whirr.run import Run, init
