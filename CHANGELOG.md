@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.2...v0.5.3) (2026-01-16)
+
+
+### Bug Fixes
+
+* handle PostgreSQL datetime objects in WorkerRecord ([b367f75](https://github.com/syntropy-systems-oss/whirr/commit/b367f751509e60e8d7f1f7f4b3c7f0645024216d))
+
 ## [0.5.2](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.1...v0.5.2) (2026-01-16)
 
 
