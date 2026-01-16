@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Iterator, Optional, Protocol, cast
+from typing import TYPE_CHECKING, Annotated, Optional, Protocol, cast
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse

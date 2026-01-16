@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Union, cast
+from typing import Optional, cast
 
 from pydantic import Field, TypeAdapter, field_validator
 
@@ -76,7 +76,7 @@ class JobRecord(WhirrBaseModel):
             return None
         if isinstance(value, datetime):
             return value.isoformat()
-        return cast(str, value)
+        return cast("str", value)
 
 
 class RunRecord(WhirrBaseModel):
@@ -131,7 +131,7 @@ class RunRecord(WhirrBaseModel):
             return None
         if isinstance(value, datetime):
             return value.isoformat()
-        return cast(str, value)
+        return cast("str", value)
 
 
 class WorkerRecord(WhirrBaseModel):
@@ -155,4 +155,4 @@ class WorkerRecord(WhirrBaseModel):
             return None
         if isinstance(value, datetime):
             return value.isoformat()
-        return cast(str, value)
+        return cast("str", value)

@@ -93,6 +93,7 @@ target-version = "py39"
 "src/whirr/cli/**" = [
     "B008",
     "C901",
+    "FA100",  # keep Optional for py3.9 compatibility
     "FBT001",
     "FBT002",
     "FBT003",
@@ -101,6 +102,12 @@ target-version = "py39"
     "PLR0913",
     "PLR0915",
     "PLR2004",
+    "S104",  # binding to 0.0.0.0 is intentional for server commands
+]
+"src/whirr/dashboard/**" = [
+    "BLE001",  # broad exception catch is intentional for resilient UI
+    "PLC0415",  # deferred imports for optional dependencies
+    "TC003",  # Iterator used at runtime for contextmanager
 ]
 
 [tool.ruff.lint]

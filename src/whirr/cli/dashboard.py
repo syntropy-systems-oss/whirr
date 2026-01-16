@@ -29,7 +29,7 @@ def dashboard(
     # If server URL provided, use remote mode
     if server:
         os.environ["WHIRR_SERVER_URL"] = server
-        console.print(f"[bold]whirr dashboard[/bold] (remote mode)")
+        console.print("[bold]whirr dashboard[/bold] (remote mode)")
         console.print(f"  Server: [cyan]{server}[/cyan]")
     else:
         from whirr.config import require_whirr_dir
@@ -45,7 +45,7 @@ def dashboard(
             )
             console.print(f"{error_message}\n{hint_message}")
             raise typer.Exit(1) from e
-        console.print(f"[bold]whirr dashboard[/bold] (local mode)")
+        console.print("[bold]whirr dashboard[/bold] (local mode)")
 
     console.print(f"  Dashboard: [cyan]http://{host}:{port}[/cyan]")
     console.print("[dim]Press Ctrl+C to stop[/dim]\n")
