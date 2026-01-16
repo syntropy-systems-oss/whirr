@@ -66,6 +66,18 @@ class JobRecord(WhirrBaseModel):
             return _LIST_STR_ADAPTER.validate_json(value)
         return cast("list[str]", value)
 
+    @field_validator(
+        "created_at", "started_at", "finished_at", "heartbeat_at",
+        "lease_expires_at", "cancel_requested_at", mode="before"
+    )
+    @classmethod
+    def _parse_datetime(cls, value: object) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return cast(str, value)
+
 
 class RunRecord(WhirrBaseModel):
     """Database run record."""
@@ -111,6 +123,15 @@ class RunRecord(WhirrBaseModel):
         if isinstance(value, str):
             return RunSummary.model_validate_json(value)
         return RunSummary.model_validate(value)
+
+    @field_validator("started_at", "finished_at", mode="before")
+    @classmethod
+    def _parse_datetime(cls, value: object) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return cast(str, value)
 
 
 class WorkerRecord(WhirrBaseModel):

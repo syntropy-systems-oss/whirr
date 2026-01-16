@@ -54,6 +54,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  whirr-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: whirr dashboard --host 0.0.0.0 --server http://whirr-server:8080
+    environment:
+      WHIRR_SERVER_URL: http://whirr-server:8080
+    volumes:
+      # Bind mount shared storage so dashboard can read run artifacts
+      - ${WHIRR_DATA_DIR:?WHIRR_DATA_DIR is required}:/data
+    ports:
+      - "${WHIRR_DASHBOARD_PORT:-8265}:8265"
+    depends_on:
+      - whirr-server
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
