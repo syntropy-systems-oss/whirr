@@ -6,5 +6,5 @@ Queue jobs, track metrics, and wake up to results.
 
 from whirr.run import Run, init
 
-__version__ = "0.5.3"
+__version__ = "0.6.0"
 __all__ = ["Run", "__version__", "init"]
