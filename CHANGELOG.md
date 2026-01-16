@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.3...v0.6.0) (2026-01-16)
+
+
+### Features
+
+* add server mode support to dashboard ([8d5a5c9](https://github.com/syntropy-systems-oss/whirr/commit/8d5a5c9563cfcffc2c496a4a692a8ab572c30499))
+* auto-create run records when completing jobs ([1ab0eb3](https://github.com/syntropy-systems-oss/whirr/commit/1ab0eb3c1617a3785909979d4a49177dc3cacfe4))
+
+
+### Bug Fixes
+
+* resolve all basedpyright type errors ([24ba0ae](https://github.com/syntropy-systems-oss/whirr/commit/24ba0aeace5f6a2386476cbaabb5f1f4d331ef51))
+* resolve remaining basedpyright type errors for typer Ellipsis ([e33f860](https://github.com/syntropy-systems-oss/whirr/commit/e33f8601ed86f459f7dd31eef37de3e88af44b6f))
+* resolve ruff linting errors for CI ([ccccedd](https://github.com/syntropy-systems-oss/whirr/commit/ccccedd0598333e202bd5dd31464d8adf8fb5b34))
+
 ## [0.5.3](https://github.com/syntropy-systems-oss/whirr/compare/v0.5.2...v0.5.3) (2026-01-16)
 
 
