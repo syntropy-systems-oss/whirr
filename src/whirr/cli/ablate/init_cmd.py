@@ -15,10 +15,10 @@ console = Console()
 
 def init(
     name: str = typer.Argument(
-        cast("str", ...), help="Name for the ablation session"
+        cast("str", cast("object", ...)), help="Name for the ablation session"
     ),
     metric: str = typer.Option(
-        cast("str", ...),
+        cast("str", cast("object", ...)),
         "--metric",
         "-m",
         help="Metric to track (e.g., 'win', 'loss', 'accuracy')",

@@ -14,7 +14,7 @@ console = Console()
 
 def retry(
     job_id: int = typer.Argument(
-        default=cast("int", ...),
+        default=cast("int", cast("object", ...)),
         help="Job ID to retry",
     ),
 ) -> None:

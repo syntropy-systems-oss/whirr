@@ -18,7 +18,7 @@ console = Console()
 
 def sweep(
     config_file: Path = typer.Argument(
-        default=cast("Path", ...),
+        default=cast("Path", cast("object", ...)),
         help="Path to sweep configuration YAML file",
         exists=True,
     ),

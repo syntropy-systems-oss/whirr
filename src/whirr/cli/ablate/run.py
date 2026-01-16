@@ -85,7 +85,9 @@ def substitute_templates(argv: list[str], seed: int, cfg_path: str) -> list[str]
 
 def run(
     ctx: typer.Context,
-    name: str = typer.Argument(default=cast("str", ...), help="Session name"),
+    name: str = typer.Argument(
+        default=cast("str", cast("object", ...)), help="Session name"
+    ),
     replicates: Optional[int] = typer.Option(
         None,
         "--replicates",

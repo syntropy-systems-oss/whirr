@@ -22,7 +22,7 @@ console = Console()
 
 def compare(
     run_ids: list[str] = typer.Argument(
-        cast("list[str]", ...), help="Run IDs to compare (2 or more)"
+        cast("list[str]", cast("object", ...)), help="Run IDs to compare (2 or more)"
     ),
     metrics: bool = typer.Option(
         False,

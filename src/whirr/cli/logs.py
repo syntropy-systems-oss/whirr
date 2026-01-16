@@ -17,7 +17,7 @@ console = Console()
 
 def logs(
     job_id: int = typer.Argument(
-        default=cast("int", ...),
+        default=cast("int", cast("object", ...)),
         help="Job ID to show logs for",
     ),
     follow: bool = typer.Option(

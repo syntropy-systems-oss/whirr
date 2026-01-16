@@ -67,7 +67,9 @@ def extract_metric(
 
 
 def rank(
-    name: str = typer.Argument(default=cast("str", ...), help="Session name"),
+    name: str = typer.Argument(
+        default=cast("str", cast("object", ...)), help="Session name"
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",

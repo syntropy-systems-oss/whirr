@@ -56,9 +56,9 @@ def parse_value(value: str, project_root: Path) -> ConfigValue:
 
 
 def add(
-    name: str = typer.Argument(cast("str", ...), help="Session name"),
+    name: str = typer.Argument(cast("str", cast("object", ...)), help="Session name"),
     deltas: list[str] = typer.Argument(
-        cast("list[str]", ...), help="Delta(s) in key=value format"
+        cast("list[str]", cast("object", ...)), help="Delta(s) in key=value format"
     ),
     delta_name: Optional[str] = typer.Option(
         None,

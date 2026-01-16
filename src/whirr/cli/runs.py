@@ -114,7 +114,7 @@ def runs(
 
 def show(
     run_id: str = typer.Argument(
-        default=cast("str", ...),
+        default=cast("str", cast("object", ...)),
         help="Run ID to show details for",
     ),
 ) -> None:
